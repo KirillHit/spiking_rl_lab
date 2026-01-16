@@ -1,0 +1,25 @@
+[project]
+name = "spike_rl_experiments"
+version = "1.0.0"
+authors = [
+  { name="Kirill Khitushkin", email="khitushkink@mail.ru" },
+]
+description = "Experimental framework for reinforcement learning with spiking neural network policies, supporting multiple algorithms, configurable training pipelines, and reproducible experimentation."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+
+[project.urls]
+"Homepage" = "https://github.com/KirillHit/spike_rl_experiments"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "INP001"
+]
+

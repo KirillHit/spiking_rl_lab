@@ -1,0 +1,37 @@
+rl_params:
+  mode: train # train, optimize, evaluate
+  seed: 42
+  run_name: null
+
+  env:
+    id: CartPole-v1
+    n_envs: 8
+    render_mode: human
+
+  algorithm:
+    name: ppo
+    params:
+      learning_rate: 3e-4
+      gamma: 0.99
+      n_steps: 2048
+      batch_size: 64
+      n_epochs: 10
+      device: cpu
+
+  policy:
+    name: mlp
+    params:
+      net_arch: [64, 64]
+
+  optuna:
+    n_trials: 50
+    parameters:
+      - parameter: algorithm.learning_rate
+      - parameter: policy.hidden_size
+
+  training:
+    total_timesteps: 100000
+
+  logging:
+    loggers: ["tensorboard"]
+    folder: logs/carpolet

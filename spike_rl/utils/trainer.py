@@ -1,0 +1,131 @@
+"""Trainer module that runs reinforcement learning experiments."""
+
+import datetime
+from pathlib import Path
+
+import gymnasium as gym
+import torch
+from jsonargparse import Namespace
+from stable_baselines3 import A2C, PPO
+from stable_baselines3.common.base_class import BaseAlgorithm, BasePolicy
+from stable_baselines3.common.logger import configure
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+
+from spike_rl.utils.logger import logger
+
+ALGORITHM_REGISTRY: dict[str, type[BaseAlgorithm]] = {
+    "ppo": PPO,
+    "a2c": A2C,
+}
+
+POLICY_REGISTRY: dict[str, str | type[BasePolicy]] = {
+    "mlp": "MlpPolicy",
+    "cnn": "CnnPolicy",
+}
+
+
+class Trainer:
+    """Trainer class for running RL experiments with a given configuration."""
+
+    def run(self, cfg: Namespace) -> None:
+        """Run the training loop using the provided configuration.
+
+        Args:
+            cfg (Namespace): Configuration namespace.
+
+        """
+        logger.info(f"Starting Trainer in mode {cfg.mode}...")
+        logger.info("Parameters:\n" + str(cfg.as_dict()))
+
+        cfg.run_name = self.gen_run_name(cfg) if cfg.run_name is None else cfg.run_name
+        logger.info(f"Run name: {cfg.run_name}")
+
+        torch.manual_seed(cfg.seed)
+
+        match cfg.mode:
+            case "train":
+                model = self.train(cfg)
+            case "evaluate":
+                pass
+            case "optimize":
+                pass
+            case _:
+                logger.error("Unsupported mode: cfg.mode!")
+
+        logger.info("Trainer finished.")
+
+    def train(self, cfg: Namespace) -> BaseAlgorithm | None:
+        """Run training procedure for the given experiment configuration."""
+        model = self.build_model(cfg)
+        if model is None:
+            return None
+
+        logger.info(f"Starting training for {cfg.training.total_timesteps} timesteps...")
+        model.learn(
+            total_timesteps=cfg.training.total_timesteps,
+            tb_log_name="run",
+            progress_bar=True,
+        )
+
+        save_path = Path(cfg.logging.folder) / cfg.run_name / "model.zip"
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Saving model to {save_path}")
+        model.save(save_path)
+
+        return model
+
+    def build_model(self, cfg: Namespace) -> BaseAlgorithm | None:
+        """Create the environment and RL model according to the configuration."""
+        logger.info("Creating environments...")
+
+        def make_env():
+            def _init():
+                render_mode = None if cfg.env.n_envs > 1 else cfg.env.render_mode
+                env = gym.make(cfg.env.id, render_mode=render_mode)
+                return env
+
+            return _init
+
+        if cfg.env.n_envs > 1:
+            env = SubprocVecEnv([make_env() for _ in range(cfg.env.n_envs)])
+        else:
+            env = DummyVecEnv([make_env()])
+        env.seed(cfg.seed)
+
+        logger.info(f"Created environment {cfg.env.id} with {cfg.env.n_envs} parallel envs.")
+
+        logger.info("Building model...")
+
+        try:
+            algo_cls = ALGORITHM_REGISTRY[cfg.algorithm.name]
+        except KeyError:
+            logger.error(f"Unsupported algorithm: {cfg.algorithm.name}.")
+            return None
+
+        try:
+            policy = POLICY_REGISTRY[cfg.policy.name]
+        except KeyError:
+            logger.error(f"Unsupported policy: {cfg.policy.name}.")
+            return None
+
+        model = algo_cls(
+            policy=policy,
+            env=env,
+            policy_kwargs=cfg.policy.params,
+            verbose=1,
+            **cfg.algorithm.params,
+        )
+
+        logger_folder = (
+            None if cfg.logging.folder is None else str(Path(cfg.logging.folder) / cfg.run_name)
+        )
+        new_logger = configure(logger_folder, cfg.logging.loggers)
+        model.set_logger(new_logger)
+
+        return model
+
+    def gen_run_name(self, cfg: Namespace) -> str:
+        """Generate a deterministic run name based on the experiment configuration."""
+        ts = datetime.datetime.now(tz=datetime.UTC).strftime("%Y%m%d_%H%M%S")
+        return f"{cfg.algorithm.name}_{cfg.policy.name}_{cfg.env.id}_{ts}"

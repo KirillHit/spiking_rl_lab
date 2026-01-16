@@ -1,0 +1,12 @@
+name: tracker_sandbox
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - gymnasium
+      - stable-baselines3[extra]
+      - jsonargparse
+      - tensorboard
