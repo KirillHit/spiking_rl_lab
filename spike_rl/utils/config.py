@@ -61,7 +61,6 @@ class LoggingConfig:
     loggers: list[str]
     folder: str | None = None
     level: str = "INFO"
-    cmd_log_path: str | None = None
 
 
 @dataclass

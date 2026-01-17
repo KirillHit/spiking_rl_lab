@@ -11,7 +11,7 @@ from stable_baselines3.common.base_class import BaseAlgorithm, BasePolicy
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
-from spike_rl.utils.logger import logger
+from spike_rl.utils.logger import console_logger, logger
 
 ALGORITHM_REGISTRY: dict[str, type[BaseAlgorithm]] = {
     "ppo": PPO,
@@ -34,11 +34,16 @@ class Trainer:
             cfg (Namespace): Configuration namespace.
 
         """
-        logger.info(f"Starting Trainer in mode {cfg.mode}...")
-        logger.info("Parameters:\n" + str(cfg.as_dict()))
-
         cfg.run_name = self.gen_run_name(cfg) if cfg.run_name is None else cfg.run_name
+        cfg.logging.folder = str(Path(cfg.logging.folder) / cfg.run_name)
+
+        console_logger.configure(cfg.logging.level, str(Path(cfg.logging.folder) / "stdout.log"))
+
+        # TODO safe git diff
+
+        logger.info(f"Starting Trainer in mode {cfg.mode}...")
         logger.info(f"Run name: {cfg.run_name}")
+        logger.info("Parameters:\n" + str(cfg.as_dict()))
 
         torch.manual_seed(cfg.seed)
 
@@ -67,7 +72,7 @@ class Trainer:
             progress_bar=True,
         )
 
-        save_path = Path(cfg.logging.folder) / cfg.run_name / "model.zip"
+        save_path = Path(cfg.logging.folder) / "model.zip"
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"Saving model to {save_path}")
@@ -117,11 +122,10 @@ class Trainer:
             **cfg.algorithm.params,
         )
 
-        logger_folder = (
-            None if cfg.logging.folder is None else str(Path(cfg.logging.folder) / cfg.run_name)
-        )
-        new_logger = configure(logger_folder, cfg.logging.loggers)
+        new_logger = configure(cfg.logging.folder, cfg.logging.loggers)
         model.set_logger(new_logger)
+
+        # TODO: load
 
         return model
 
