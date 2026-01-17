@@ -2,26 +2,34 @@ rl_params:
   mode: train # train, optimize, evaluate
   seed: 42
   experiment_name: test
+  checkpoint_path: null
+  device: cpu
 
   env:
-    id: CartPole-v1
-    n_envs: 8
+    id: Ant-v5
+    n_envs: 16
     render_mode: human
+    normalization:
+      enable: True
+      norm_obs: True
+      norm_reward: True
+      params:
+        clip_obs: 10
+
 
   algorithm:
     name: ppo
     params:
-      learning_rate: 3e-4
-      gamma: 0.99
+      learning_rate: null
       n_steps: 2048
-      batch_size: 64
-      n_epochs: 10
-      device: cpu
+      batch_size: 256
+      n_epochs: 4
+      ent_coef: 0.01
 
   policy:
     name: mlp
     params:
-      net_arch: [64, 64]
+      net_arch: [256, 256]
 
   optuna:
     n_trials: 50
@@ -30,7 +38,8 @@ rl_params:
       - parameter: policy.hidden_size
 
   training:
-    total_timesteps: 20000
+    total_timesteps: 8000000
+    n_eval_episodes: 20
 
   logging:
     folder: logs

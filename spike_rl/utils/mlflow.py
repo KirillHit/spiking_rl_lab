@@ -1,6 +1,7 @@
 """MLflow utilities for logging metrics, git information, and configuring experiments."""
 
 import contextlib
+import json
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -60,5 +61,17 @@ def log_git_diff_artifact(folder: Path) -> None:
     diff_file.write_text(subprocess.check_output(["git", "diff"], text=True))  # noqa: S607
     mlflow.log_artifact(str(diff_file))
 
-    commit_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    mlflow.set_tag("git_commit", commit_hash)
+
+def log_model_metadata(run: mlflow.ActiveRun, folder: Path) -> None:
+    """Save the current MLflow run's parameters, metrics, and tags as a JSON artifact."""
+    client = mlflow.tracking.MlflowClient()
+    run_data = client.get_run(run.info.run_id)
+    metadata = {
+        "params": run_data.data.params,
+        "metrics": run_data.data.metrics,
+        "tags": run_data.data.tags,
+    }
+    metadata_path = folder / "run_metadata.json"
+    with metadata_path.open("w") as f:
+        json.dump(metadata, f, indent=4)
+    mlflow.log_artifact(metadata_path)

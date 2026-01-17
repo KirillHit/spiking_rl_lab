@@ -3,10 +3,18 @@
 These dataclasses can be used with jsonargparse to read YAML configs, perform CLI overrides.
 """
 
-from argparse import Namespace
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
+
+
+@dataclass
+class EnvNormalizationConfig:
+    """Environment normalization configuration."""
+
+    enable: bool
+    norm_obs: bool
+    norm_reward: bool
+    params: dict[str, Any]
 
 
 @dataclass
@@ -14,8 +22,9 @@ class EnvConfig:
     """Environment configuration."""
 
     id: str
-    render_mode: str = ""
-    n_envs: int | None = None
+    render_mode: str
+    n_envs: int | None
+    normalization: EnvNormalizationConfig
 
 
 @dataclass
@@ -39,6 +48,7 @@ class TrainingConfig:
     """Training settings."""
 
     total_timesteps: int
+    n_eval_episodes: int = 10
 
 
 @dataclass
@@ -71,9 +81,11 @@ class Config:
     mode: str
     seed: int
     experiment_name: str
+    checkpoint_path: str | None
+    device: str
     env: EnvConfig
     algorithm: AlgorithmConfig
     policy: PolicyConfig
     training: TrainingConfig
     logging: LoggingConfig
-    optuna: OptunaConfig | None = None
+    optuna: OptunaConfig | None
