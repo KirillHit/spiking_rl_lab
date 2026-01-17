@@ -1,4 +1,4 @@
-"""..."""
+"""MLflow utilities for logging metrics, git information, and configuring experiments."""
 
 import contextlib
 import subprocess
@@ -20,7 +20,7 @@ class MLflowOutputFormat(KVWriter):
         key_excluded: dict[str, str | tuple[str, ...]],
         step: int = 0,
     ) -> None:
-        """..."""
+        """Log key/value metrics to MLflow, skipping excluded keys."""
         for (key, value), (_, excluded) in zip(
             sorted(key_values.items()),
             sorted(key_excluded.items()),
@@ -40,8 +40,7 @@ sb3_logger = Logger(
 
 
 def setup_mlflow(base_dir: Path, experiment_name: str | None = None) -> None:
-    base_dir.mkdir(parents=True, exist_ok=True)
-
+    """Initialize MLflow for an experiment."""
     mlflow.set_tracking_uri(f"sqlite:///{base_dir / 'mlflow.db'}")
 
     with contextlib.suppress(MlflowException):
@@ -54,13 +53,12 @@ def setup_mlflow(base_dir: Path, experiment_name: str | None = None) -> None:
 
 
 def log_git_diff_artifact(folder: Path) -> None:
-    """..."""
+    """Log the current git diff as an artifact and the current commit as a tag."""
     folder.mkdir(exist_ok=True)
 
     diff_file = folder / "git_diff.txt"
     diff_file.write_text(subprocess.check_output(["git", "diff"], text=True))  # noqa: S607
     mlflow.log_artifact(str(diff_file))
 
-    commit_file = folder / "git_commit.txt"
-    commit_file.write_text(subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip())  # noqa: S607
-    mlflow.log_artifact(str(commit_file))
+    commit_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    mlflow.set_tag("git_commit", commit_hash)

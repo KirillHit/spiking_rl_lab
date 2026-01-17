@@ -64,7 +64,7 @@ class Trainer:
         cfg_dict = cfg.as_dict()
         cfg_dict.pop("optuna", None)
         cfg_dict.pop("logging", None)
-        mlflow.log_params(flatten(cfg_dict, "dot"))
+        mlflow.log_params(flatten(cfg_dict, "path"))
 
         log_git_diff_artifact(Path(cfg.logging.folder))
 
