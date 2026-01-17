@@ -3,7 +3,9 @@
 These dataclasses can be used with jsonargparse to read YAML configs, perform CLI overrides.
 """
 
+from argparse import Namespace
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -58,7 +60,6 @@ class OptunaConfig:
 class LoggingConfig:
     """Logging configuration (backends and folder)."""
 
-    loggers: list[str]
     folder: str | None = None
     level: str = "INFO"
 

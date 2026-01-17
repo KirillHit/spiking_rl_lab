@@ -4,14 +4,16 @@ import datetime
 from pathlib import Path
 
 import gymnasium as gym
+import mlflow
 import torch
+from flatten_dict import flatten
 from jsonargparse import Namespace
 from stable_baselines3 import A2C, PPO
 from stable_baselines3.common.base_class import BaseAlgorithm, BasePolicy
-from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from spike_rl.utils.logger import console_logger, logger
+from spike_rl.utils.mlflow import log_git_diff_artifact, sb3_logger
 
 ALGORITHM_REGISTRY: dict[str, type[BaseAlgorithm]] = {
     "ppo": PPO,
@@ -35,15 +37,15 @@ class Trainer:
 
         """
         cfg.run_name = self.gen_run_name(cfg) if cfg.run_name is None else cfg.run_name
-        cfg.logging.folder = str(Path(cfg.logging.folder) / cfg.run_name)
 
         console_logger.configure(cfg.logging.level, str(Path(cfg.logging.folder) / "stdout.log"))
 
-        # TODO safe git diff
+        mlflow.set_tracking_uri(f"sqlite:///{(Path(cfg.logging.folder) / 'mlflow.db').resolve()}")
+        mlflow.create_experiment(cfg.run_name, str(Path(cfg.logging.folder) / "artifacts"))
+        mlflow.set_experiment(cfg.run_name)
 
         logger.info(f"Starting Trainer in mode {cfg.mode}...")
         logger.info(f"Run name: {cfg.run_name}")
-        logger.info("Parameters:\n" + str(cfg.as_dict()))
 
         torch.manual_seed(cfg.seed)
 
@@ -61,6 +63,15 @@ class Trainer:
 
     def train(self, cfg: Namespace) -> BaseAlgorithm | None:
         """Run training procedure for the given experiment configuration."""
+        mlflow.start_run(run_name=cfg.run_name)
+
+        cfg_dict = cfg.as_dict()
+        cfg_dict.pop("optuna", None)
+        cfg_dict.pop("logging", None)
+        mlflow.log_params(flatten(cfg_dict, "dot"))
+
+        log_git_diff_artifact(Path(cfg.logging.folder))
+
         model = self.build_model(cfg)
         if model is None:
             return None
@@ -73,10 +84,12 @@ class Trainer:
         )
 
         save_path = Path(cfg.logging.folder) / "model.zip"
+        logger.info(f"Saving model to {save_path}...")
         save_path.parent.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"Saving model to {save_path}")
         model.save(save_path)
+        mlflow.log_artifact(str(save_path.resolve()))
+
+        mlflow.end_run()
 
         return model
 
@@ -122,8 +135,7 @@ class Trainer:
             **cfg.algorithm.params,
         )
 
-        new_logger = configure(cfg.logging.folder, cfg.logging.loggers)
-        model.set_logger(new_logger)
+        model.set_logger(sb3_logger)
 
         # TODO: load
 

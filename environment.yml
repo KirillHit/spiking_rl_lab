@@ -10,3 +10,7 @@ dependencies:
       - stable-baselines3[extra]
       - jsonargparse
       - tensorboard
+      - colorlog
+      - mlflow
+      - flatten-dict
+      - dvc

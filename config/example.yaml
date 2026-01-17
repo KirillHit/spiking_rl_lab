@@ -33,5 +33,4 @@ rl_params:
     total_timesteps: 100000
 
   logging:
-    loggers: ["tensorboard"]
-    folder: logs/carpolet
+    folder: logs
