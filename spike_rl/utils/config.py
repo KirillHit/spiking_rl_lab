@@ -70,10 +70,10 @@ class Config:
 
     mode: str
     seed: int
+    experiment_name: str
     env: EnvConfig
     algorithm: AlgorithmConfig
     policy: PolicyConfig
     training: TrainingConfig
     logging: LoggingConfig
-    run_name: str | None = None
     optuna: OptunaConfig | None = None

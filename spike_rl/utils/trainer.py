@@ -13,7 +13,7 @@ from stable_baselines3.common.base_class import BaseAlgorithm, BasePolicy
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from spike_rl.utils.logger import console_logger, logger
-from spike_rl.utils.mlflow import log_git_diff_artifact, sb3_logger
+from spike_rl.utils.mlflow import log_git_diff_artifact, sb3_logger, setup_mlflow
 
 ALGORITHM_REGISTRY: dict[str, type[BaseAlgorithm]] = {
     "ppo": PPO,
@@ -36,16 +36,12 @@ class Trainer:
             cfg (Namespace): Configuration namespace.
 
         """
-        cfg.run_name = self.gen_run_name(cfg) if cfg.run_name is None else cfg.run_name
-
         console_logger.configure(cfg.logging.level, str(Path(cfg.logging.folder) / "stdout.log"))
 
-        mlflow.set_tracking_uri(f"sqlite:///{(Path(cfg.logging.folder) / 'mlflow.db').resolve()}")
-        mlflow.create_experiment(cfg.run_name, str(Path(cfg.logging.folder) / "artifacts"))
-        mlflow.set_experiment(cfg.run_name)
-
         logger.info(f"Starting Trainer in mode {cfg.mode}...")
-        logger.info(f"Run name: {cfg.run_name}")
+        logger.info(f"Experiment name: {cfg.experiment_name}")
+
+        setup_mlflow(Path("experiments"), cfg.experiment_name)
 
         torch.manual_seed(cfg.seed)
 
@@ -63,7 +59,7 @@ class Trainer:
 
     def train(self, cfg: Namespace) -> BaseAlgorithm | None:
         """Run training procedure for the given experiment configuration."""
-        mlflow.start_run(run_name=cfg.run_name)
+        mlflow.start_run(run_name=self.gen_run_name(cfg))
 
         cfg_dict = cfg.as_dict()
         cfg_dict.pop("optuna", None)
@@ -87,7 +83,7 @@ class Trainer:
         logger.info(f"Saving model to {save_path}...")
         save_path.parent.mkdir(parents=True, exist_ok=True)
         model.save(save_path)
-        mlflow.log_artifact(str(save_path.resolve()))
+        mlflow.log_artifact(save_path)
 
         mlflow.end_run()
 

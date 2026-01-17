@@ -1,7 +1,7 @@
 rl_params:
   mode: train # train, optimize, evaluate
   seed: 42
-  run_name: null
+  experiment_name: test
 
   env:
     id: CartPole-v1
@@ -30,7 +30,7 @@ rl_params:
       - parameter: policy.hidden_size
 
   training:
-    total_timesteps: 100000
+    total_timesteps: 20000
 
   logging:
     folder: logs

@@ -1,11 +1,13 @@
 """..."""
 
+import contextlib
 import subprocess
 from pathlib import Path
 from typing import Any
 
 import mlflow
 import numpy as np
+from mlflow.exceptions import MlflowException
 from stable_baselines3.common.logger import KVWriter, Logger
 
 
@@ -37,16 +39,28 @@ sb3_logger = Logger(
 )
 
 
+def setup_mlflow(base_dir: Path, experiment_name: str | None = None) -> None:
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    mlflow.set_tracking_uri(f"sqlite:///{base_dir / 'mlflow.db'}")
+
+    with contextlib.suppress(MlflowException):
+        mlflow.create_experiment(
+            name=experiment_name,
+            artifact_location=str(base_dir / "artifacts"),
+        )
+
+    mlflow.set_experiment(experiment_name)
+
+
 def log_git_diff_artifact(folder: Path) -> None:
     """..."""
     folder.mkdir(exist_ok=True)
 
-    # git diff
     diff_file = folder / "git_diff.txt"
-    diff_file.write_text(subprocess.check_output(["git", "diff"], text=True))
-    mlflow.log_artifact(str(diff_file.resolve()))
+    diff_file.write_text(subprocess.check_output(["git", "diff"], text=True))  # noqa: S607
+    mlflow.log_artifact(str(diff_file))
 
-    # git commit
     commit_file = folder / "git_commit.txt"
-    commit_file.write_text(subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip())
-    mlflow.log_artifact(str(commit_file.resolve()))
+    commit_file.write_text(subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip())  # noqa: S607
+    mlflow.log_artifact(str(commit_file))
