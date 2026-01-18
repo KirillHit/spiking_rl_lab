@@ -1,16 +1,17 @@
 rl_params:
-  mode: train # train, optimize, evaluate
+  mode: evaluate # train, optimize, evaluate
   seed: 42
   experiment_name: test
-  checkpoint_path: null
+  checkpoint_path: experiments/models/example_ant/model.zip
   device: cuda
 
   env:
     id: Ant-v5
-    n_envs: 16
+    n_envs: 1
     render_mode: human
     normalization:
       enable: True
+      vecnorm_path: experiments/models/example_ant/vecnorm.pkl
       norm_obs: True
       norm_reward: True
       params:
@@ -38,7 +39,7 @@ rl_params:
       - parameter: policy.hidden_size
 
   training:
-    total_timesteps: 8000000
+    total_timesteps: 2000000
     n_eval_episodes: 20
 
   logging:

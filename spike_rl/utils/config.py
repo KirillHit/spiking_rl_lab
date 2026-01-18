@@ -12,6 +12,7 @@ class EnvNormalizationConfig:
     """Environment normalization configuration."""
 
     enable: bool
+    vecnorm_path: str | None
     norm_obs: bool
     norm_reward: bool
     params: dict[str, Any]
