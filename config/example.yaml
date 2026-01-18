@@ -35,8 +35,14 @@ rl_params:
   optuna:
     n_trials: 50
     parameters:
-      - parameter: algorithm.learning_rate
-      - parameter: policy.hidden_size
+      - parameter: "algorithm.params.learning_rate"
+        type: "float"
+        low: 1e-5
+        high: 1e-2
+        log: true
+      - parameter: "policy.params.net_arch"
+        type: "categorical"
+        choices: [[64, 64], [128, 128], [256, 256]]
 
   training:
     total_timesteps: 2000000

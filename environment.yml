@@ -15,3 +15,4 @@ dependencies:
       - flatten-dict
       - dvc
       - dvc_s3
+      - optuna

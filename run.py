@@ -7,7 +7,7 @@ from spike_rl.utils.config import Config
 def prepare_parser() -> ArgumentParser:
     parser = ArgumentParser(
         description="RL-SNN trainer",
-        default_config_files=["config/example.yaml"],
+        default_config_files=["config/test.yaml"],
     )
     parser.add_argument(
         "--config",

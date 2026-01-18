@@ -3,7 +3,7 @@
 These dataclasses can be used with jsonargparse to read YAML configs, perform CLI overrides.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -23,7 +23,7 @@ class EnvConfig:
     """Environment configuration."""
 
     id: str
-    render_mode: str
+    render_mode: str | None
     n_envs: int | None
     normalization: EnvNormalizationConfig
 
@@ -56,15 +56,21 @@ class TrainingConfig:
 class OptunaParameter:
     """Definition of a single hyperparameter to optimize and its search space."""
 
-    parameter: str
+    parameter: str  # Full path to the parameter in the config, e.g., "algorithm.learning_rate"
+    type: str = "float"  # Parameter type: "float", "int", or "categorical"
+    low: float | None = None  # Lower bound (for float/int)
+    high: float | None = None  # Upper bound (for float/int)
+    log: bool = False  # Whether to use log scale (for float)
+    choices: list | None = None  # List of possible values (for categorical)
 
 
 @dataclass
 class OptunaConfig:
     """Hyperparameter optimization configuration for Optuna."""
 
-    n_trials: int
-    parameters: list[OptunaParameter]
+    n_trials: int  # Number of trials to run
+    n_jobs: int
+    parameters: list[OptunaParameter] = field(default_factory=list)  # List of parameters
 
 
 @dataclass

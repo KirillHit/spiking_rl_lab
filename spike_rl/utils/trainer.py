@@ -6,6 +6,7 @@ from pathlib import Path
 
 import gymnasium as gym
 import mlflow
+import optuna
 import torch
 from flatten_dict import flatten
 from jsonargparse import Namespace
@@ -59,13 +60,13 @@ class Trainer:
             case "evaluate":
                 self.evaluate(cfg)
             case "optimize":
-                pass
+                self.optimize(cfg)
             case _:
                 logger.error("Unsupported mode: cfg.mode!")
 
         logger.info("Trainer finished.")
 
-    def train(self, cfg: Namespace) -> BaseAlgorithm | None:
+    def train(self, cfg: Namespace) -> tuple[BaseAlgorithm, float, float] | None:
         """Run training procedure for the given experiment configuration."""
         logger.info("Preparing for training...")
         model = self.build_model(cfg)
@@ -96,7 +97,7 @@ class Trainer:
 
             log_model_metadata(run, Path(cfg.logging.folder))
 
-        return model
+        return model, mean_reward, std_reward
 
     def evaluate(self, cfg: Namespace, model: BaseAlgorithm | None = None) -> tuple[float, float]:
         """Run policy evaluation and log results."""
@@ -125,6 +126,68 @@ class Trainer:
         )
 
         return mean_reward, std_reward
+
+    def optimize(self, cfg: Namespace) -> None:
+        """Run hyperparameter optimization using Optuna."""
+        logger.info("Starting hyperparameter optimization...")
+
+        def objective(trial: optuna.Trial) -> float:
+            """Objective function for Optuna trials."""
+            trial_cfg = cfg.clone()
+
+            for param in cfg.optuna.parameters:
+                keys = param.parameter.split(".")
+
+                target = trial_cfg
+                for k in keys[:-1]:
+                    target = getattr(target, k)
+
+                if param.type == "float":
+                    value = trial.suggest_float(
+                        param.parameter,
+                        param.low,
+                        param.high,
+                        log=param.log,
+                    )
+                elif param.type == "int":
+                    value = trial.suggest_int(
+                        param.parameter,
+                        int(param.low),
+                        int(param.high),
+                        log=param.log,
+                    )
+                elif param.type == "categorical":
+                    if not param.choices:
+                        msg = f"Categorical parameter {param.parameter} must have choices"
+                        raise ValueError(msg)
+                    value = trial.suggest_categorical(param.parameter, param.choices)
+                else:
+                    msg = f"Unsupported Optuna parameter type: {param.type}"
+                    raise ValueError(msg)
+
+                last_key = keys[-1]
+                if isinstance(target, dict):
+                    if last_key not in target:
+                        msg = f"Config has no parameter '{param.parameter}'"
+                        raise AttributeError(msg)
+                    target[last_key] = value
+                else:
+                    if not hasattr(target, last_key):
+                        msg = f"Config has no parameter '{param.parameter}'"
+                        raise AttributeError(msg)
+                    setattr(target, last_key, value)
+
+            result = self.train(trial_cfg)
+            if result is None:
+                return float("-inf")
+
+            return result[1]
+
+        study = optuna.create_study(direction="maximize")
+        study.optimize(objective, n_trials=cfg.optuna.n_trials, n_jobs=cfg.optuna.n_jobs)
+
+        logger.info(f"Best trial: {study.best_trial.number} -> {study.best_value:.2f}")
+        logger.info(f"Best parameters: {study.best_params}")
 
     def build_model(self, cfg: Namespace) -> BaseAlgorithm | None:
         """Create the environment and RL model according to the configuration."""
