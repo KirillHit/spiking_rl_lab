@@ -1,28 +1,27 @@
 rl_params:
-  mode: evaluate # train, optimize, evaluate
+  mode: optimize # train, optimize, evaluate
   seed: 42
-  experiment_name: example
-  checkpoint_path: experiments/models/example_ant/model.zip
+  experiment_name: test
+  checkpoint_path:
   device: cuda
 
   env:
     id: Ant-v5
-    n_envs: 1
+    n_envs: 8
     render_mode: human
     normalization:
       enable: True
-      vecnorm_path: experiments/models/example_ant/vecnorm.pkl
+      vecnorm_path:
       norm_obs: True
       norm_reward: True
       params:
         clip_obs: 10
 
-
   algorithm:
     name: ppo
     params:
       learning_rate: 3e-4
-      n_steps: 2048
+      n_steps: 1024
       batch_size: 256
       n_epochs: 4
       ent_coef: 0.01
@@ -30,11 +29,11 @@ rl_params:
   policy:
     name: mlp
     params:
-      net_arch: [256, 256]
+      net_arch: [64, 64]
 
   optuna:
     n_trials: 50
-    n_jobs: 1
+    n_jobs: 2
     parameters:
       - parameter: "algorithm.params.learning_rate"
         type: "float"
@@ -43,12 +42,12 @@ rl_params:
         log: true
       - parameter: "policy.params.net_arch"
         type: "categorical"
-        choices: [[64, 64], [128, 128], [256, 256]]
+        choices: [[64, 64], [128, 128]]
 
   training:
-    total_timesteps: 2000000
+    total_timesteps: 20000000
     n_eval_episodes: 20
-    n_eval_step: 100000
+    n_eval_step: 30000
 
   logging:
     folder: logs

@@ -49,7 +49,8 @@ class TrainingConfig:
     """Training settings."""
 
     total_timesteps: int
-    n_eval_episodes: int = 10
+    n_eval_episodes: int
+    n_eval_step: int
 
 
 @dataclass
