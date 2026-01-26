@@ -1,5 +1,5 @@
 [project]
-name = "spike_rl_experiments"
+name = "spiking_rl_lab"
 version = "1.0.0"
 authors = [
   { name="Kirill Khitushkin", email="khitushkink@mail.ru" },
@@ -11,7 +11,17 @@ license = "MIT"
 license-files = ["LICENSE"]
 
 [project.urls]
-"Homepage" = "https://github.com/KirillHit/spike_rl_experiments"
+"Homepage" = "https://github.com/KirillHit/spiking_rl_lab"
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 line-length = 100
@@ -22,4 +32,3 @@ select = ["ALL"]
 ignore = [
   "INP001"
 ]
-

@@ -1,0 +1,9 @@
+mode: evaluate # train, optimize, evaluate
+seed: 42
+experiment_name: example
+checkpoint_path: experiments/models/example_ant/model.zip
+device: cuda
+
+total_timesteps: 20000000
+n_eval_episodes: 20
+n_eval_step: 30000

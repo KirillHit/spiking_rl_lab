@@ -1,0 +1,7 @@
+name: ppo
+params:
+  learning_rate: 3e-4
+  n_steps: 2048
+  batch_size: 256
+  n_epochs: 4
+  ent_coef: 0.01

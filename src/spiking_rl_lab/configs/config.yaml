@@ -1,0 +1,15 @@
+defaults:
+  - base_config
+  - algorithm: ppo
+  - env: ant_v5
+  - optuna: base
+  - policy: mlp
+  - trainer: base
+  - _self_
+
+hydra:
+  run:
+    dir: logs/${trainer.experiment_name}/${now:%Y-%m-%d_%H-%M-%S}_${env.id}_${algorithm.name}_${policy.name}
+  sweep:
+    dir: logs/${trainer.experiment_name}/${now:%Y-%m-%d_%H-%M-%S}_${env.id}_${algorithm.name}_${policy.name}
+    subdir: ${hydra.job.num}
