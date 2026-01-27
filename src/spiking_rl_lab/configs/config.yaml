@@ -5,6 +5,7 @@ defaults:
   - optuna: base
   - policy: mlp
   - trainer: base
+  - override hydra/job_logging: colorlog
   - _self_
 
 hydra:

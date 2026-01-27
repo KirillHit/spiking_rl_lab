@@ -1,6 +1,7 @@
 """Utilities for Hydra configuration registration."""
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from hydra.core.config_store import ConfigStore
@@ -53,6 +54,7 @@ class TrainerConfig:
     experiment_name: str = MISSING
     checkpoint_path: str | None = None
     device: str = "cpu"
+    output_dir: Path = MISSING
 
     total_timesteps: int = MISSING
     n_eval_episodes: int = MISSING
@@ -81,7 +83,7 @@ class OptunaConfig:
 
 
 @dataclass
-class Config:
+class BaseConfig:
     """Top-level experiment configuration containing mode, seed, and subconfigs."""
 
     env: EnvConfig = field(default_factory=EnvConfig)
@@ -94,4 +96,4 @@ class Config:
 def register_configs() -> None:
     """Register the root config schema in Hydra's ConfigStore."""
     cs = ConfigStore.instance()
-    cs.store(name="base_config", node=Config)
+    cs.store(name="base_config", node=BaseConfig)
