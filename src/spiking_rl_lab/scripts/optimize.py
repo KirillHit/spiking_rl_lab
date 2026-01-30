@@ -4,5 +4,5 @@ from spiking_rl_lab.utils.config import BaseConfig
 
 
 def optimize(cfg: BaseConfig) -> None:
-    """Run hyperparameter optimization with the provided configuration."""
+    """Run hyperparameter optimization for the configured experiment."""
     raise NotImplementedError

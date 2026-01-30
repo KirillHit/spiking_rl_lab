@@ -4,5 +4,5 @@ from spiking_rl_lab.utils.config import BaseConfig
 
 
 def train(cfg: BaseConfig) -> None:
-    """Train an agent end-to-end with the provided configuration."""
+    """Run a training session using the provided experiment configuration."""
     raise NotImplementedError

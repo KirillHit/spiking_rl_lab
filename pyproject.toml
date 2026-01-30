@@ -34,13 +34,6 @@ exclude = [
 # Hatch testing configuration
 # -------------------------
 
-[tool.hatch.envs.lint]
-extra-dependencies = ["ruff", "black"]
-
-[tool.hatch.envs.lint.scripts]
-ruff_check = "ruff check ."
-black_check = "black --check ."
-
 [tool.hatch.envs.base.scripts]
 run = "spiking-rl-lab"
 
