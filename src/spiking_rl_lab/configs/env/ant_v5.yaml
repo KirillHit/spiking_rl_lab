@@ -1,10 +1,4 @@
+backend: gymnasium
 id: Ant-v5
 n_envs: 1
-render_mode: human
-normalization:
-  enable: True
-  vecnorm_path: experiments/models/example_ant/vecnorm.pkl
-  norm_obs: True
-  norm_reward: True
-  params:
-    clip_obs: 10
+render: true

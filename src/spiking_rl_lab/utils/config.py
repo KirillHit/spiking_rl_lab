@@ -1,6 +1,7 @@
 """Utilities for Hydra configuration registration."""
 
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -8,25 +9,20 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
 
-@dataclass
-class EnvNormalizationConfig:
-    """Environment normalization configuration."""
+class EnvBackend(str, Enum):
+    """..."""
 
-    enable: bool = False
-    vecnorm_path: str | None = None
-    norm_obs: bool = False
-    norm_reward: bool = False
-    params: dict[str, Any] = field(default_factory=dict)
+    gymnasium = "gymnasium"
 
 
 @dataclass
 class EnvConfig:
     """Environment configuration."""
 
+    backend: EnvBackend = MISSING
     id: str = MISSING
-    render_mode: str = "human"
+    render: bool = False
     n_envs: int = 1
-    normalization: EnvNormalizationConfig = field(default_factory=EnvNormalizationConfig)
 
 
 @dataclass
@@ -55,6 +51,7 @@ class TrainerConfig:
     checkpoint_path: str | None = None
     device: str = "cpu"
     output_dir: Path = MISSING
+    deterministic: bool = False
 
     total_timesteps: int = MISSING
     n_eval_episodes: int = MISSING

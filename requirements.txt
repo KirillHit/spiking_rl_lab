@@ -1,10 +1,7 @@
 hydra-core>=1.3
 colorlog
 optuna
-
+skrl>=1.4
 gymnasium[mujoco]
 tensorboard
-mlflow
-dvc
-dvc_s3
 optuna
