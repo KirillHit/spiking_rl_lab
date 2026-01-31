@@ -1,11 +1,4 @@
-mode: evaluate # train, optimize, evaluate
-seed: 42
-experiment_name: example
-checkpoint_path: experiments/models/example_ant/model.zip
-device: cuda
-output_dir: ${hydra:runtime.output_dir}
-deterministic: true
-
-total_timesteps: 20000000
-n_eval_episodes: 20
-n_eval_step: 30000
+use_parallel: false
+params:
+  timesteps: 10000
+  headless: True

@@ -4,10 +4,8 @@ import logging
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from skrl.utils import set_seed
 
-from spiking_rl_lab.scripts import evaluate, optimize, train
-from spiking_rl_lab.utils import register_configs
+from spiking_rl_lab.utils import Runner, register_configs
 from spiking_rl_lab.utils.config import BaseConfig
 
 register_configs()
@@ -21,22 +19,11 @@ log = logging.getLogger(__name__)
 
 def run(cfg: BaseConfig) -> None:
     """Run the training loop using the provided configuration."""
-    log.info("Starting SpikingRL Lab in mode: %s", cfg.trainer.mode)
-    log.info("Experiment name: %s", cfg.trainer.experiment_name)
-
-    set_seed(cfg.trainer.seed, deterministic=cfg.trainer.deterministic)
-
-    match cfg.trainer.mode:
-        case "train":
-            train(cfg)
-        case "evaluate":
-            evaluate(cfg)
-        case "optimize":
-            optimize(cfg)
-        case _:
-            log.error("Unsupported mode: %s!", cfg.trainer.mode)
-
-    log.info("SpikingRL Lab finished.")
+    runner = Runner()
+    try:
+        runner.run(cfg)
+    except Exception:
+        log.exception("Run failed!")
 
 
 @hydra.main(version_base="1.3", config_path="configs", config_name="config")

@@ -1,3 +1,0 @@
-name: mlp
-params:
-  net_arch: [64, 64]

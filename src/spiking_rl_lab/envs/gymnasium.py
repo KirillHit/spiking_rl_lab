@@ -24,7 +24,7 @@ def build_gymnasium(cfg: EnvConfig) -> Wrapper:
             env = gym.make_vec(
                 cfg.id,
                 num_envs=cfg.n_envs,
-                vectorization_mode="async",
+                vectorization_mode="sync",
                 render_mode="human" if cfg.render else None,
             )
     except Exception as exc:
@@ -32,7 +32,7 @@ def build_gymnasium(cfg: EnvConfig) -> Wrapper:
         raise EnvironmentCreationError(msg) from exc
 
     try:
-        wrapped_env = wrap_env(env)
+        wrapped_env = wrap_env(env, verbose=False)
     except Exception as exc:
         msg = f"Failed to wrap Gymnasium environment '{cfg.id}': {exc}"
         raise EnvironmentCreationError(msg) from exc

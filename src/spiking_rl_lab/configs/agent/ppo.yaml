@@ -1,4 +1,6 @@
 name: ppo
+device: cuda
+memory_size: 1024
 params:
   learning_rate: 3e-4
   n_steps: 2048

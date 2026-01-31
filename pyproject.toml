@@ -36,6 +36,7 @@ exclude = [
 
 [tool.hatch.envs.base.scripts]
 run = "spiking-rl-lab"
+mlflow_ui = "mlflow ui --backend-store-uri sqlite:///experiments/mlflow.db"
 
 # -------------------------
 # Dependencies from requirements.txt
@@ -53,5 +54,9 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-  "INP001"
+  "INP001",
+  "PLC0415",
+  "PLR0913",
+  "ARG001",
+  "ARG002"
 ]

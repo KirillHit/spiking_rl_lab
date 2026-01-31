@@ -1,16 +1,17 @@
 defaults:
   - base_config
-  - algorithm: ppo
-  - env: ant_v5
+  - agent: ppo
+  - env: pendulum_v1
   - optuna: base
-  - policy: mlp
+  - models: mlp
+  - runner: base
   - trainer: base
   - override hydra/job_logging: colorlog
   - _self_
 
 hydra:
   run:
-    dir: logs/${trainer.experiment_name}/${now:%Y-%m-%d_%H-%M-%S}_${env.id}_${algorithm.name}_${policy.name}
+    dir: runs/${runner.experiment_name}/${env.id}/${now:%Y-%m-%d_%H-%M-%S}_${agent.name}
   sweep:
-    dir: logs/${trainer.experiment_name}/${now:%Y-%m-%d_%H-%M-%S}_${env.id}_${algorithm.name}_${policy.name}
+    dir: runs/${runner.experiment_name}/${env.id}/${now:%Y-%m-%d_%H-%M-%S}_${agent.name}
     subdir: ${hydra.job.num}

@@ -1,4 +1,4 @@
-# spike_ppo_experiments
+# SpikingRL Lab
 
 https://dagshub.com/KirillHit/spike_rl_experiments
 

@@ -1,0 +1,5 @@
+mode: train # train, optimize, evaluate
+seed: 42
+deterministic: false
+experiment_name: test
+output_dir: ${hydra:runtime.output_dir}

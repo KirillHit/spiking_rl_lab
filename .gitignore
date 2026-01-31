@@ -221,6 +221,6 @@ __marimo__/
 
 # Custom
 .vscode
-logs
+runs
 mlruns
 !src/spiking_rl_lab/configs/env

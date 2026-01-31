@@ -2,6 +2,9 @@ hydra-core>=1.3
 colorlog
 optuna
 skrl>=1.4
-gymnasium[mujoco]
+gymnasium[classic-control, mujoco]
 tensorboard
 optuna
+mlflow
+flatten_dict
+torch
