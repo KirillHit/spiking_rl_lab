@@ -1,4 +1,4 @@
 backend: gymnasium
 id: Pendulum-v1
-n_envs: 4
-render: false
+n_envs: 1
+render: true

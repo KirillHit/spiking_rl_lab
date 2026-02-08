@@ -1,7 +1,7 @@
 """Utilities for Hydra configuration registration."""
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +9,7 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
 
-class EnvBackend(str, Enum):
+class EnvBackend(StrEnum):
     """Supported environment backends."""
 
     gymnasium = "gymnasium"
@@ -35,7 +35,7 @@ class AgentConfig:
     params: dict[str, Any] = field(default_factory=dict)
 
 
-class ModelRole(str, Enum):
+class ModelRole(StrEnum):
     """Role of a model within an agent's architecture."""
 
     policy = "policy"
@@ -49,6 +49,12 @@ class ModelConfig:
     name: str = MISSING
     role: ModelRole = MISSING
     device: str = "cpu"
+    gaussian: bool = True
+    """
+    Whether to use Gaussian policies for continuous action spaces.
+    If False, DeterministicMixin will be used instead.
+    """
+
     params: dict[str, Any] = field(default_factory=dict)
 
 
@@ -59,7 +65,7 @@ class ModelsConfig:
     models: list[ModelConfig] = field(default_factory=list)
 
 
-class RunnerMode(str, Enum):
+class RunnerMode(StrEnum):
     """Supported runner modes."""
 
     train = "train"

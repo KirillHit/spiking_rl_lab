@@ -31,12 +31,20 @@ exclude = [
 ]
 
 # -------------------------
-# Hatch testing configuration
+# Hatch configuration
 # -------------------------
-
+[tool.hatch.metadata]
+allow-direct-references = true
 [tool.hatch.envs.base.scripts]
 run = "spiking-rl-lab"
 mlflow_ui = "mlflow ui --backend-store-uri sqlite:///experiments/mlflow.db"
+
+[tool.hatch.envs.lint]
+extra-dependencies = ["ruff"]
+
+[tool.hatch.envs.lint.scripts]
+ruff_check = "ruff check ."
+ruff_format = "ruff format --check ."
 
 # -------------------------
 # Dependencies from requirements.txt

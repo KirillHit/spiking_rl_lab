@@ -1,7 +1,7 @@
 defaults:
   - base_config
   - agent: ppo
-  - env: pendulum_v1
+  - env: cartpole_v1
   - optuna: base
   - models: mlp
   - runner: base

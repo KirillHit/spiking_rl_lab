@@ -2,8 +2,6 @@ models:
   - name: mlp
     role: policy
     device: cuda
-    params:
-      clip_actions: True
   - name: mlp
     role: value
     device: cuda

@@ -62,14 +62,12 @@ class Runner:
 
                 log.info("Starting training...")
                 trainer.train()
-
-                log.info("Starting evaluate...")
-                trainer.eval()
             except SpikingRLLabError:
                 log.exception("Training failed!")
 
             log_model_metadata(run, cfg.runner.output_dir)
             mlflow.log_artifact(str(cfg.runner.output_dir / "run.log"))
+            mlflow.log_artifact(str(cfg.runner.output_dir / "checkpoints" / "best_agent.pt"))
 
     def evaluate(self, cfg: BaseConfig) -> None:
         """Run the evaluation loop."""
