@@ -8,4 +8,4 @@ flatten_dict
 torch
 dagshub
 
-skrl @ git+https://github.com/Toni-SM/skrl.git@5a078cff1a611d51eb2164101cdd6fa84e3eec2d
+skrl @ git+https://github.com/Toni-SM/skrl.git@d81196df22aa8433f3808baa49a24e303f78deaa

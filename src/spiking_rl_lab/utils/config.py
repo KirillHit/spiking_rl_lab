@@ -82,7 +82,8 @@ class RunnerConfig:
     deterministic: bool = False
     experiment_name: str = MISSING
     output_dir: Path = MISSING
-    mlflow_dir: Path = "experiments"
+    dagshub_repo_owner: str = MISSING
+    dagshub_repo_name: str = MISSING
 
 
 @dataclass

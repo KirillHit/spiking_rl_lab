@@ -1,6 +1,5 @@
 """MLflow utilities for logging metrics, git information, and configuring experiments."""
 
-import contextlib
 import json
 import logging
 import subprocess
@@ -8,24 +7,17 @@ from dataclasses import asdict
 from enum import Enum
 from pathlib import Path
 
+import dagshub
 import mlflow
-from mlflow.exceptions import MlflowException
 
 from spiking_rl_lab.utils.config import BaseConfig
 
 log = logging.getLogger(__name__)
 
 
-def setup_mlflow(base_dir: Path, experiment_name: str | None = None) -> None:
-    """Initialize MLflow for an experiment."""
-    mlflow.set_tracking_uri(f"sqlite:///{base_dir / 'mlflow.db'}")
-
-    with contextlib.suppress(MlflowException):
-        mlflow.create_experiment(
-            name=experiment_name or "default",
-            artifact_location=str(base_dir / "artifacts"),
-        )
-
+def setup_mlflow(repo_owner: str, repo_name: str, experiment_name: str) -> None:
+    """Initialize MLflow tracking against the configured DagsHub repository."""
+    dagshub.init(repo_owner=repo_owner, repo_name=repo_name, mlflow=True)
     mlflow.set_experiment(experiment_name)
 
 
