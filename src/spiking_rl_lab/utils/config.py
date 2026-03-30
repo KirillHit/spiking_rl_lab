@@ -15,7 +15,7 @@ class EnvBackend(StrEnum):
     gymnasium = "gymnasium"
 
 
-@dataclass
+@dataclass(slots=True)
 class EnvConfig:
     """Environment configuration."""
 
@@ -25,7 +25,7 @@ class EnvConfig:
     n_envs: int = 1
 
 
-@dataclass
+@dataclass(slots=True)
 class AgentConfig:
     """RL algorithm configuration."""
 
@@ -42,7 +42,7 @@ class ModelRole(StrEnum):
     value = "value"
 
 
-@dataclass
+@dataclass(slots=True)
 class ModelConfig:
     """Configuration for a single model instance."""
 
@@ -58,7 +58,7 @@ class ModelConfig:
     params: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class ModelsConfig:
     """Collection of model configurations for an experiment."""
 
@@ -73,7 +73,7 @@ class RunnerMode(StrEnum):
     optimize = "optimize"
 
 
-@dataclass
+@dataclass(slots=True)
 class RunnerConfig:
     """Training settings."""
 
@@ -86,7 +86,7 @@ class RunnerConfig:
     dagshub_repo_name: str = MISSING
 
 
-@dataclass
+@dataclass(slots=True)
 class TrainerConfig:
     """Training settings."""
 
@@ -94,7 +94,7 @@ class TrainerConfig:
     params: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class OptunaParameter:
     """Definition of a single hyperparameter to optimize and its search space."""
 
@@ -106,7 +106,7 @@ class OptunaParameter:
     choices: list | None = None  # List of possible values (for categorical)
 
 
-@dataclass
+@dataclass(slots=True)
 class OptunaConfig:
     """Hyperparameter optimization configuration for Optuna."""
 
@@ -115,7 +115,7 @@ class OptunaConfig:
     parameters: list[OptunaParameter] = field(default_factory=list)  # List of parameters
 
 
-@dataclass
+@dataclass(slots=True)
 class BaseConfig:
     """Top-level experiment configuration containing mode, seed, and subconfigs."""
 
