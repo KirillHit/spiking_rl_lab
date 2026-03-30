@@ -30,6 +30,11 @@ def log_git_diff_artifact(folder: Path) -> None:
             ["git", "rev-parse", "--is-inside-work-tree"],  # noqa: S607
             stderr=subprocess.DEVNULL,
         )
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],  # noqa: S607
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
         diff = subprocess.check_output(
             ["git", "diff"],  # noqa: S607
             text=True,
@@ -37,6 +42,8 @@ def log_git_diff_artifact(folder: Path) -> None:
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         return
+
+    mlflow.set_tag("git_commit", commit)
 
     if not diff.strip():
         return
