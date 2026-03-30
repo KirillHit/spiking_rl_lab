@@ -6,5 +6,6 @@ tensorboard
 mlflow
 flatten_dict
 torch
+dagshub
 
 skrl @ git+https://github.com/Toni-SM/skrl.git@5a078cff1a611d51eb2164101cdd6fa84e3eec2d

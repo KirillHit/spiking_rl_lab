@@ -37,7 +37,6 @@ exclude = [
 allow-direct-references = true
 [tool.hatch.envs.base.scripts]
 run = "spiking-rl-lab"
-mlflow_ui = "mlflow ui --backend-store-uri sqlite:///experiments/mlflow.db"
 
 [tool.hatch.envs.lint]
 extra-dependencies = ["ruff"]
