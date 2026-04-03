@@ -5,14 +5,10 @@ import logging
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from spiking_rl_lab.utils import Runner, register_configs
-from spiking_rl_lab.utils.config import BaseConfig
+from spiking_rl_lab.utils.config import BaseConfig, register_configs
+from spiking_rl_lab.utils.runner import Runner
 
 register_configs()
-
-# Silence the default skrl handlers to avoid duplicate log output.
-skrl_logger = logging.getLogger("skrl")
-skrl_logger.handlers.clear()
 
 log = logging.getLogger(__name__)
 

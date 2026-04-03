@@ -220,3 +220,4 @@ __marimo__/
 runs
 mlruns
 !src/spiking_rl_lab/configs/env
+experiments

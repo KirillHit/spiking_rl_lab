@@ -8,6 +8,7 @@ from enum import Enum
 from pathlib import Path
 
 import dagshub
+import httpx
 import mlflow
 
 from spiking_rl_lab.utils.config import BaseConfig
@@ -17,7 +18,14 @@ log = logging.getLogger(__name__)
 
 def setup_mlflow(repo_owner: str, repo_name: str, experiment_name: str) -> None:
     """Initialize MLflow tracking against the configured DagsHub repository."""
-    dagshub.init(repo_owner=repo_owner, repo_name=repo_name, mlflow=True)
+    try:
+        dagshub.init(repo_owner=repo_owner, repo_name=repo_name, mlflow=True)
+    except httpx.NetworkError:
+        log.warning(
+            "Failed to connect to DagsHub. Experiment logs will be stored locally: "
+            "./experiments/mlflow.db",
+        )
+        mlflow.set_tracking_uri("sqlite:///experiments/mlflow.db")
     mlflow.set_experiment(experiment_name)
 
 
@@ -66,6 +74,14 @@ def log_model_metadata(run: mlflow.ActiveRun, folder: Path) -> None:
     with metadata_path.open("w") as f:
         json.dump(metadata, f, indent=4)
     mlflow.log_artifact(str(metadata_path))
+
+
+def log_artifact_if_exists(path: Path) -> None:
+    """Log an artifact file if it exists."""
+    if not path.exists():
+        log.warning("Artifact file does not exist and will not be logged to MLflow: %s", path)
+        return
+    mlflow.log_artifact(str(path))
 
 
 def config_to_dict(cfg: BaseConfig) -> dict:

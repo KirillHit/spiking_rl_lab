@@ -1,4 +1,4 @@
-use_parallel: true
+use_parallel: false
 params:
   timesteps: 10000
   headless: True

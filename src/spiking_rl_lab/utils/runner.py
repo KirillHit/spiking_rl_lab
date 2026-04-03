@@ -15,6 +15,7 @@ from spiking_rl_lab.utils.config import BaseConfig, RunnerMode
 from spiking_rl_lab.utils.exception import SpikingRLLabError, TrainerCreationError
 from spiking_rl_lab.utils.mlflow import (
     config_to_dict,
+    log_artifact_if_exists,
     log_git_diff_artifact,
     log_model_metadata,
     setup_mlflow,
@@ -59,7 +60,7 @@ class Runner:
             cfg_dict = config_to_dict(cfg)
             cfg_dict.pop("optuna", None)
             mlflow.log_params(flatten(cfg_dict, "path"))
-            mlflow.log_artifact(str(cfg.runner.output_dir / ".hydra" / "config.yaml"))
+            log_artifact_if_exists(cfg.runner.output_dir / ".hydra" / "config.yaml")
 
             try:
                 trainer = self._generate_trainer(cfg)
@@ -68,10 +69,10 @@ class Runner:
                 trainer.train()
             except SpikingRLLabError:
                 log.exception("Training failed!")
-
-            log_model_metadata(run, cfg.runner.output_dir)
-            mlflow.log_artifact(str(cfg.runner.output_dir / "run.log"))
-            mlflow.log_artifact(str(cfg.runner.output_dir / "checkpoints" / "best_agent.pt"))
+            finally:
+                log_model_metadata(run, cfg.runner.output_dir)
+                log_artifact_if_exists(cfg.runner.output_dir / "run.log")
+                log_artifact_if_exists(cfg.runner.output_dir / "checkpoints" / "best_agent.pt")
 
     def evaluate(self, cfg: BaseConfig) -> None:
         """Run the evaluation loop."""

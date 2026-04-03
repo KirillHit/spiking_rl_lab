@@ -45,15 +45,15 @@ extra-dependencies = ["ruff"]
 ruff_check = "ruff check ."
 ruff_format = "ruff format --check ."
 
-# -------------------------
+# ----------------------------------
 # Dependencies from requirements.txt
-# -------------------------
+# ----------------------------------
 [tool.hatch.metadata.hooks.requirements_txt]
 files = ["requirements.txt"]
 
-# -------------------------
+# -------------------
 # Formatting / lint
-# -------------------------
+# -------------------
 [tool.ruff]
 line-length = 100
 target-version = "py312"

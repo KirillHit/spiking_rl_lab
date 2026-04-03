@@ -1,6 +1,6 @@
 mode: train # train, optimize, evaluate
 seed: 42
-deterministic: false
+deterministic: true
 experiment_name: test
 output_dir: ${hydra:runtime.output_dir}
 dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}

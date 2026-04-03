@@ -27,7 +27,7 @@ class BaseAgent(Agent, ABC):
                 mlflow.log_metric(safe_key, np.max(value), timestep)
             else:
                 mlflow.log_metric(safe_key, np.mean(value), timestep)
-        # reset data containers for next iteration
+        # Reset the data buffers before the next iteration.
         self._track_rewards.clear()
         self._track_timesteps.clear()
         self.tracking_data.clear()

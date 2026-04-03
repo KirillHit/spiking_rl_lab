@@ -20,8 +20,17 @@ handlers:
   file:
     class: logging.FileHandler
     formatter: simple
-    # absolute file path
     filename: ${hydra.runtime.output_dir}/${hydra.job.name}.log
+
+loggers:
+  mlflow:
+    handlers: [console, file]
+    level: INFO
+    propagate: False
+  skrl:
+    handlers: [console, file]
+    level: INFO
+    propagate: False
 
 root:
   level: INFO

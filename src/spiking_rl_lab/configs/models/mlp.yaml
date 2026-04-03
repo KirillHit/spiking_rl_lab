@@ -1,7 +1,7 @@
 models:
-  - name: mlp
+  - name: mlp_policy
     role: policy
-    device: cuda
-  - name: mlp
+    device: cpu
+  - name: mlp_value
     role: value
-    device: cuda
+    device: cpu
