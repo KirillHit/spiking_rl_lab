@@ -1,4 +1,4 @@
 backend: gymnasium
 id: CartPole-v1
 n_envs: 1
-render: false
+render: true

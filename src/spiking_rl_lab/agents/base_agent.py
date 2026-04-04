@@ -40,15 +40,15 @@ class BaseAgent(Agent, ABC):
 
     def write_tracking_data(self, timestep: int, timesteps: int) -> None:
         """Flush tracked metrics to MLflow and reset local buffers."""
+        del timesteps
+
+        metrics: dict[str, float] = {}
         for key, value in self.tracking_data.items():
-            safe_key = self._mlflow_key(key)
-            if key.endswith("(min)"):
-                mlflow.log_metric(safe_key, np.min(value), timestep)
-            elif key.endswith("(max)"):
-                mlflow.log_metric(safe_key, np.max(value), timestep)
-            else:
-                mlflow.log_metric(safe_key, np.mean(value), timestep)
-        # Reset the data buffers before the next iteration.
+            metrics[self._mlflow_key(key)] = self._reduce_tracking_value(key, value)
+
+        if metrics and mlflow.active_run() is not None:
+            mlflow.log_metrics(metrics, step=timestep)
+
         self._track_rewards.clear()
         self._track_timesteps.clear()
         self.tracking_data.clear()
@@ -57,3 +57,11 @@ class BaseAgent(Agent, ABC):
     def _mlflow_key(key: str) -> str:
         key = key.replace(" (min)", "_min").replace(" (max)", "_max").replace(" (mean)", "_mean")
         return re.sub(r"[^0-9A-Za-z_\-\. :/ ]+", "_", key)
+
+    @staticmethod
+    def _reduce_tracking_value(key: str, value: list[float]) -> float:
+        if key.endswith("(min)"):
+            return float(np.min(value))
+        if key.endswith("(max)"):
+            return float(np.max(value))
+        return float(np.mean(value))

@@ -82,6 +82,7 @@ class RunnerConfig:
     deterministic: bool = False
     experiment_name: str = MISSING
     output_dir: Path = MISSING
+    checkpoint_path: Path | None = None
     dagshub_repo_owner: str = MISSING
     dagshub_repo_name: str = MISSING
 

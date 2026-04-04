@@ -1,7 +1,8 @@
-mode: train # train, optimize, evaluate
+mode: evaluate # train, optimize, evaluate
 seed: 42
 deterministic: true
 experiment_name: test
 output_dir: ${hydra:runtime.output_dir}
+checkpoint_path: runs/test/CartPole-v1/2026-04-04_21-21-40_reinforce/checkpoints/best_agent.pt
 dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
 dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}

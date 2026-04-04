@@ -2,6 +2,3 @@ models:
   - name: mlp_policy
     role: policy
     device: cuda
-  - name: mlp_value
-    role: value
-    device: cuda

@@ -1,9 +1,9 @@
 defaults:
   - base_config
-  - agent: ppo
+  - agent: reinforce
   - env: cartpole_v1
   - optuna: base
-  - models: mlp
+  - models: reinforce_mlp
   - runner: base
   - trainer: base
   - override hydra/job_logging: colorlog

@@ -2,6 +2,7 @@
 
 import datetime
 import logging
+from pathlib import Path
 
 import mlflow
 from flatten_dict import flatten
@@ -97,12 +98,29 @@ class Runner:
         models = build_models(cfg.models, env)
         agent = build_agent(cfg.agent, env, models)
         agent.experiment_dir = cfg.runner.output_dir
+        self._load_checkpoint_if_configured(agent=agent, checkpoint_path=cfg.runner.checkpoint_path)
 
         try:
             trainer_class = ParallelTrainer if cfg.trainer.use_parallel else SequentialTrainer
             return trainer_class(env=env, agents=agent, cfg=cfg.trainer.params)
         except Exception as exc:
             msg = "Failed to create trainer"
+            raise TrainerCreationError(msg) from exc
+
+    def _load_checkpoint_if_configured(self, *, agent, checkpoint_path: Path | None) -> None:  # noqa: ANN001
+        """Load agent weights from a checkpoint path if configured."""
+        if checkpoint_path is None:
+            return
+
+        if not checkpoint_path.exists():
+            msg = f"Checkpoint file does not exist: {checkpoint_path}"
+            raise TrainerCreationError(msg)
+
+        log.info("Loading agent checkpoint from '%s'...", checkpoint_path)
+        try:
+            agent.load(str(checkpoint_path))
+        except Exception as exc:
+            msg = f"Failed to load checkpoint: {checkpoint_path}"
             raise TrainerCreationError(msg) from exc
 
     def _generate_run_name(self, cfg: BaseConfig) -> str:
