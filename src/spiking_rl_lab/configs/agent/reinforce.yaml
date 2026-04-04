@@ -1,6 +1,8 @@
 name: reinforce
-device: cuda
+device: cpu
 memory_size: 1024
 params:
   rollouts: 16
   learning_rate: 3e-4
+  experiment:
+    write_interval: 1000

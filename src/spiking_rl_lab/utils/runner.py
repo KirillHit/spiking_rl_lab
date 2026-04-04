@@ -17,7 +17,9 @@ from spiking_rl_lab.utils.exception import SpikingRLLabError, TrainerCreationErr
 from spiking_rl_lab.utils.mlflow import (
     config_to_dict,
     log_artifact_if_exists,
+    log_environment_packages,
     log_git_diff_artifact,
+    log_hardware_info,
     log_model_metadata,
     setup_mlflow,
 )
@@ -62,6 +64,8 @@ class Runner:
             cfg_dict.pop("optuna", None)
             mlflow.log_params(flatten(cfg_dict, "path"))
             log_artifact_if_exists(cfg.runner.output_dir / ".hydra" / "config.yaml")
+            log_environment_packages(cfg.runner.output_dir)
+            log_hardware_info(cfg.runner.output_dir)
 
             try:
                 trainer = self._generate_trainer(cfg)

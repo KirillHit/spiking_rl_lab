@@ -47,7 +47,7 @@ class BaseAgent(Agent, ABC):
             metrics[self._mlflow_key(key)] = self._reduce_tracking_value(key, value)
 
         if metrics and mlflow.active_run() is not None:
-            mlflow.log_metrics(metrics, step=timestep)
+            mlflow.log_metrics(metrics, step=timestep, synchronous=False)
 
         self._track_rewards.clear()
         self._track_timesteps.clear()

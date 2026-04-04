@@ -1,5 +1,0 @@
-name: ppo
-device: cpu
-memory_size: 1024
-params:
-  learning_rate: 3e-4

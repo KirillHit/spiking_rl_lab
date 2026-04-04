@@ -7,5 +7,6 @@ mlflow
 flatten_dict
 torch
 dagshub
+psutil
 
 skrl[torch] @ git+https://github.com/KirillHit/skrl.git@develop
