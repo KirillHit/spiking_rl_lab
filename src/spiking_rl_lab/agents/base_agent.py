@@ -1,12 +1,22 @@
-"""Base agent helpers for MLflow tracking."""
+"""Shared base classes for agents."""
+
+from __future__ import annotations
 
 import dataclasses
 import re
 from abc import ABC
+from typing import TYPE_CHECKING, ClassVar
 
 import mlflow
 import numpy as np
 from skrl.agents.torch import Agent, AgentCfg
+from skrl.memories.torch import RandomMemory
+
+if TYPE_CHECKING:
+    from skrl.envs.wrappers.torch import Wrapper
+    from skrl.memories.torch import Memory
+
+    from spiking_rl_lab.utils.config import AgentConfig
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -16,6 +26,17 @@ class BaseAgentCfg(AgentCfg):
 
 class BaseAgent(Agent, ABC):
     """Common utilities for agents used in this project."""
+
+    cfg_cls: ClassVar[type[BaseAgentCfg]] = BaseAgentCfg
+
+    @classmethod
+    def build_memory(cls, *, cfg: AgentConfig, env: Wrapper) -> Memory | None:
+        """Build agent memory.
+
+        Agents can override this hook to customize replay / rollout memory
+        construction or opt out of memory allocation entirely.
+        """
+        return RandomMemory(memory_size=cfg.memory_size, num_envs=env.num_envs, device=cfg.device)
 
     def write_tracking_data(self, timestep: int, timesteps: int) -> None:
         """Flush tracked metrics to MLflow and reset local buffers."""

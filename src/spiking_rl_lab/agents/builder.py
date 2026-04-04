@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from skrl.memories.torch import RandomMemory
-
-from spiking_rl_lab.agents.base_agent import BaseAgent
+from spiking_rl_lab.agents.base_agent import BaseAgent, BaseAgentCfg
 from spiking_rl_lab.utils.exception import AgentCreationError
 
 if TYPE_CHECKING:
@@ -26,6 +24,20 @@ TAgent = TypeVar("TAgent", bound="BaseAgent")
 AGENT_REGISTRY: dict[str, type[BaseAgent]] = {}
 
 
+def _build_agent_cfg(agent_cls: type[BaseAgent], params: dict[str, Any]) -> BaseAgentCfg:
+    """Build a typed agent config for ``agent_cls`` from raw params."""
+    cfg_cls = agent_cls.cfg_cls
+    if not issubclass(cfg_cls, BaseAgentCfg):
+        msg = f"{agent_cls.__name__}.cfg_cls must inherit BaseAgentCfg"
+        raise AgentCreationError(msg)
+
+    try:
+        return cfg_cls(**params)
+    except Exception as exc:
+        msg = f"Invalid config for agent '{agent_cls.__name__}'"
+        raise AgentCreationError(msg) from exc
+
+
 def build_agent(cfg: AgentConfig, env: Wrapper, models: dict[str, Model]) -> BaseAgent:
     """Build an agent according to the provided configuration.
 
@@ -41,17 +53,24 @@ def build_agent(cfg: AgentConfig, env: Wrapper, models: dict[str, Model]) -> Bas
         msg = f"Unsupported agent: {cfg.name}"
         raise AgentCreationError(msg)
 
-    memory = RandomMemory(memory_size=cfg.memory_size, num_envs=env.num_envs, device=cfg.device)
+    typed_cfg = _build_agent_cfg(agent_class, cfg.params)
 
-    return agent_class(
-        models=models,
-        memory=memory,
-        observation_space=env.observation_space,
-        state_space=env.state_space,
-        action_space=env.action_space,
-        device=cfg.device,
-        cfg=cfg.params,
-    )
+    try:
+        memory = agent_class.build_memory(cfg=cfg, env=env)
+        return agent_class(
+            models=models,
+            memory=memory,
+            observation_space=env.observation_space,
+            state_space=env.state_space,
+            action_space=env.action_space,
+            device=cfg.device,
+            cfg=typed_cfg,
+        )
+    except AgentCreationError:
+        raise
+    except Exception as exc:
+        msg = f"Failed to create agent '{cfg.name}'"
+        raise AgentCreationError(msg) from exc
 
 
 def register_agent(name: str) -> Callable[[type[TAgent]], type[TAgent]]:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from spiking_rl_lab.agents.base_agent import BaseAgent, BaseAgentCfg
 from spiking_rl_lab.agents.builder import register_agent
@@ -23,9 +23,11 @@ class ReinforceCfg(BaseAgentCfg):
     learning_rate: float = 1e-3
 
 
-@register_agent("ppo")
+@register_agent("reinforce")
 class Reinforce(BaseAgent):
     """REINFORCE agent implementation."""
+
+    cfg_cls: ClassVar[type[ReinforceCfg]] = ReinforceCfg
 
     def __init__(
         self,
@@ -36,11 +38,9 @@ class Reinforce(BaseAgent):
         state_space: gymnasium.Space | None = None,
         action_space: gymnasium.Space | None = None,
         device: str | torch.device | None = None,
-        cfg: ReinforceCfg | dict | None = None,
+        cfg: ReinforceCfg,
     ) -> None:
         """REINFORCE agent implementation."""
-        if cfg is None:
-            cfg = {}
         self.cfg: ReinforceCfg
         super().__init__(
             models=models,
@@ -49,7 +49,7 @@ class Reinforce(BaseAgent):
             state_space=state_space,
             action_space=action_space,
             device=device,
-            cfg=ReinforceCfg(**cfg) if isinstance(cfg, dict) else cfg,
+            cfg=cfg,
         )
 
         # models
