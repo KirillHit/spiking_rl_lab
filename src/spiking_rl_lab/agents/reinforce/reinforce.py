@@ -303,9 +303,12 @@ class Reinforce(BaseAgent):
 
             policy_loss = -(sampled_returns * log_prob).mean()
             if self.cfg.entropy_loss_scale:
-                entropy_loss = -self.cfg.entropy_loss_scale * self.policy.get_entropy(
-                    role="policy",
-                ).mean()
+                entropy_loss = (
+                    -self.cfg.entropy_loss_scale
+                    * self.policy.get_entropy(
+                        role="policy",
+                    ).mean()
+                )
             else:
                 entropy_loss = torch.zeros((), device=self.device)
 
