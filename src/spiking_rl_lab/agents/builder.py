@@ -56,21 +56,23 @@ def build_agent(cfg: AgentConfig, env: Wrapper, models: dict[str, Model]) -> Bas
     typed_cfg = _build_agent_cfg(agent_class, cfg.params)
 
     try:
-        memory = agent_class.build_memory(cfg=cfg, env=env)
-        return agent_class(
+        agent = agent_class(
             models=models,
-            memory=memory,
+            memory=None,
             observation_space=env.observation_space,
             state_space=env.state_space,
             action_space=env.action_space,
             device=cfg.device,
             cfg=typed_cfg,
         )
+        agent.memory = agent.build_memory(env=env)
     except AgentCreationError:
         raise
     except Exception as exc:
         msg = f"Failed to create agent '{cfg.name}'"
         raise AgentCreationError(msg) from exc
+    else:
+        return agent
 
 
 def register_agent(name: str) -> Callable[[type[TAgent]], type[TAgent]]:

@@ -13,7 +13,12 @@ from skrl.memories.torch import RandomMemory
 
 from spiking_rl_lab.agents.base_agent import BaseAgent, BaseAgentCfg
 from spiking_rl_lab.agents.builder import register_agent
-from spiking_rl_lab.utils.exception import AgentCreationError
+from spiking_rl_lab.utils.validation import (
+    validate_min,
+    validate_optional_callable,
+    validate_positive,
+    validate_range,
+)
 
 if TYPE_CHECKING:
     import gymnasium
@@ -21,30 +26,72 @@ if TYPE_CHECKING:
     from skrl.memories.torch import Memory
     from skrl.models.torch import Model
 
-    from spiking_rl_lab.utils.config import AgentConfig
-
 
 @dataclasses.dataclass(kw_only=True)
 class ReinforceCfg(BaseAgentCfg):
     """Configuration for the REINFORCE agent."""
 
     rollouts: int = 16
+    """Number of environment steps collected before each policy update."""
+
     mini_batches: int = 1
+    """Number of mini-batches used to split one rollout during optimization."""
+
     discount_factor: float = 0.99
+    """Reward discount factor used to compute Monte Carlo returns."""
+
     learning_rate: float = 1e-3
+    """Adam optimizer learning rate."""
+
     learning_rate_scheduler: type | None = None
+    """Optional learning rate scheduler class instantiated on top of the optimizer."""
+
     learning_rate_scheduler_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
+    """Keyword arguments passed to ``learning_rate_scheduler`` during construction."""
+
     observation_preprocessor: type | None = None
+    """Optional observation preprocessor class applied before policy inference."""
+
     observation_preprocessor_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
+    """Keyword arguments passed to ``observation_preprocessor`` during construction."""
+
     state_preprocessor: type | None = None
+    """Optional state preprocessor class applied before policy inference."""
+
     state_preprocessor_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
+    """Keyword arguments passed to ``state_preprocessor`` during construction."""
+
     random_timesteps: int = 0
-    learning_starts: int = 0
+    """Number of initial timesteps that use random actions instead of the policy."""
+
     grad_norm_clip: float = 0.5
+    """Maximum gradient norm. Set to ``0`` to disable clipping."""
+
     entropy_loss_scale: float = 0.0
+    """Entropy regularization coefficient added to the policy loss."""
+
     rewards_shaper: Any | None = None
+    """Optional callable applied to rewards before storing them in rollout memory."""
+
     normalize_returns: bool = True
+    """Whether to normalize returns across the collected rollout before optimization."""
+
     mixed_precision: bool = False
+    """Whether to enable automatic mixed precision during forward and backward passes."""
+
+    def __post_init__(self) -> None:
+        """Validate REINFORCE hyperparameters after dataclass initialization."""
+        validate_min("rollouts", self.rollouts, minimum=1)
+        validate_min("mini_batches", self.mini_batches, minimum=1)
+        validate_range("discount_factor", self.discount_factor, minimum=0.0, maximum=1.0)
+        validate_positive("learning_rate", self.learning_rate)
+        validate_min("random_timesteps", self.random_timesteps, minimum=0)
+        validate_min("grad_norm_clip", self.grad_norm_clip, minimum=0.0)
+        validate_min("entropy_loss_scale", self.entropy_loss_scale, minimum=0.0)
+        validate_optional_callable("learning_rate_scheduler", self.learning_rate_scheduler)
+        validate_optional_callable("observation_preprocessor", self.observation_preprocessor)
+        validate_optional_callable("state_preprocessor", self.state_preprocessor)
+        validate_optional_callable("rewards_shaper", self.rewards_shaper)
 
 
 @register_agent("reinforce")
@@ -53,22 +100,24 @@ class Reinforce(BaseAgent):
 
     cfg_cls: ClassVar[type[ReinforceCfg]] = ReinforceCfg
 
-    @classmethod
-    def build_memory(cls, *, cfg: AgentConfig, env: Wrapper) -> Memory | None:
+    def build_memory(self, *, env: Wrapper) -> Memory | None:
         """Build rollout memory sized for at least one REINFORCE update window."""
-        rollouts = int(cfg.params.get("rollouts", 16))
-        memory_size = max(cfg.memory_size, rollouts)
-        return RandomMemory(memory_size=memory_size, num_envs=env.num_envs, device=cfg.device)
+        rollout_memory_size = self.cfg.rollouts
+        return RandomMemory(
+            memory_size=rollout_memory_size,
+            num_envs=env.num_envs,
+            device=self.device,
+        )
 
     def __init__(
         self,
         *,
         models: dict[str, Model],
-        memory: Memory | None = None,
-        observation_space: gymnasium.Space | None = None,
-        state_space: gymnasium.Space | None = None,
-        action_space: gymnasium.Space | None = None,
-        device: str | torch.device | None = None,
+        memory: Memory | None,
+        observation_space: gymnasium.Space | None,
+        state_space: gymnasium.Space | None,
+        action_space: gymnasium.Space | None,
+        device: str | torch.device | None,
         cfg: ReinforceCfg,
     ) -> None:
         """REINFORCE agent implementation."""
@@ -83,32 +132,17 @@ class Reinforce(BaseAgent):
             cfg=cfg,
         )
 
-        # models
-        self.policy = self.models.get("policy", None)
-        if self.policy is None:
-            msg = "The REINFORCE agent requires a 'policy' model."
-            raise AgentCreationError(msg)
-        if self.memory is None:
-            msg = "The REINFORCE agent requires a rollout memory."
-            raise AgentCreationError(msg)
-        if not callable(getattr(self.policy, "get_entropy", None)):
-            msg = "The REINFORCE agent requires a stochastic 'policy' model."
-            raise AgentCreationError(msg)
-
-        # checkpoint models
+        self.policy = self.models["policy"]
         self.checkpoint_modules["policy"] = self.policy
 
         if config.torch.is_distributed:
             self.policy.broadcast_parameters()
 
         self._device_type = torch.device(self.device).type
-        if version.parse(torch.__version__) >= version.parse("2.4"):
-            self.scaler = torch.amp.GradScaler(
-                device=self._device_type,
-                enabled=self.cfg.mixed_precision,
-            )
-        else:
-            self.scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.mixed_precision)
+        self.scaler = torch.amp.GradScaler(
+            device=self._device_type,
+            enabled=self.cfg.mixed_precision,
+        )
 
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=self.cfg.learning_rate)
         self.checkpoint_modules["optimizer"] = self.optimizer
@@ -180,10 +214,7 @@ class Reinforce(BaseAgent):
         with torch.autocast(device_type=self._device_type, enabled=self.cfg.mixed_precision):
             actions, outputs = self.policy.act(inputs, role="policy")
 
-        self._current_log_prob = outputs.get("log_prob")
-        if self.training and self._current_log_prob is None:
-            msg = "The REINFORCE policy must return 'log_prob' during action sampling."
-            raise AgentCreationError(msg)
+        self._current_log_prob = outputs["log_prob"]
 
         return actions, outputs
 
@@ -240,7 +271,7 @@ class Reinforce(BaseAgent):
         """Trigger policy updates after rollout collection."""
         if self.training:
             self._rollout += 1
-            if not self._rollout % self.cfg.rollouts and timestep >= self.cfg.learning_starts:
+            if not self._rollout % self.cfg.rollouts:
                 started_at = time.perf_counter()
                 self.enable_models_training_mode(enabled=True)
                 self.update(timestep=timestep, timesteps=timesteps)

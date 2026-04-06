@@ -1,6 +1,5 @@
 name: reinforce
 device: cpu
-memory_size: 1024
 params:
   rollouts: 16
   learning_rate: 3e-4

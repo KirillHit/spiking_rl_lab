@@ -31,7 +31,6 @@ class AgentConfig:
 
     name: str = MISSING
     device: str = "cpu"
-    memory_size: int = 1024
     params: dict[str, Any] = field(default_factory=dict)
 
 
