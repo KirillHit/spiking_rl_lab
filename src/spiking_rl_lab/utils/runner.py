@@ -112,7 +112,10 @@ class Runner:
             raise TrainerCreationError(msg) from exc
 
     def _load_checkpoint_if_configured(
-        self, *, agent: BaseAgent, checkpoint_path: Path | None,
+        self,
+        *,
+        agent: BaseAgent,
+        checkpoint_path: Path | None,
     ) -> None:
         """Load agent weights from a checkpoint path if configured."""
         if checkpoint_path is None:
