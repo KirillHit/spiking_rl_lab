@@ -321,7 +321,7 @@ class Reinforce(BaseAgent):
         """Sample mini-batches from the current rollout."""
         num_samples = rollout_steps * self.memory.num_envs
         batch_count = max(1, min(self.cfg.mini_batches, num_samples))
-        indexes = torch.arange(num_samples, device=self.device)
+        indexes = torch.randperm(num_samples, device=self.device)
         return self.memory.sample_by_index(
             names=self._tensors_names,
             indexes=indexes,
