@@ -13,13 +13,16 @@ from skrl.memories.torch import RandomMemory
 from spiking_rl_lab.agents.base_agent import BaseAgent, BaseAgentCfg
 from spiking_rl_lab.agents.builder import register_agent
 from spiking_rl_lab.utils.validation import (
+    resolve_optional_callable,
+    resolve_optional_class,
     validate_min,
-    validate_optional_callable,
     validate_positive,
     validate_range,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import gymnasium
     from skrl.envs.wrappers.torch import Wrapper
     from skrl.memories.torch import Memory
@@ -42,20 +45,20 @@ class ReinforceCfg(BaseAgentCfg):
     learning_rate: float = 1e-3
     """Adam optimizer learning rate."""
 
-    learning_rate_scheduler: type | None = None
-    """Optional learning rate scheduler class instantiated on top of the optimizer."""
+    learning_rate_scheduler: str | type[Any] | None = None
+    """Optional learning rate scheduler class or dotted import path."""
 
     learning_rate_scheduler_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
     """Keyword arguments passed to ``learning_rate_scheduler`` during construction."""
 
-    observation_preprocessor: type | None = None
-    """Optional observation preprocessor class applied before policy inference."""
+    observation_preprocessor: str | type[Any] | None = None
+    """Optional observation preprocessor class or dotted import path."""
 
     observation_preprocessor_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
     """Keyword arguments passed to ``observation_preprocessor`` during construction."""
 
-    state_preprocessor: type | None = None
-    """Optional state preprocessor class applied before policy inference."""
+    state_preprocessor: str | type[Any] | None = None
+    """Optional state preprocessor class or dotted import path."""
 
     state_preprocessor_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
     """Keyword arguments passed to ``state_preprocessor`` during construction."""
@@ -69,8 +72,8 @@ class ReinforceCfg(BaseAgentCfg):
     entropy_loss_scale: float = 0.0
     """Entropy regularization coefficient added to the policy loss."""
 
-    rewards_shaper: Any | None = None
-    """Optional callable applied to rewards before storing them in rollout memory."""
+    rewards_shaper: str | Callable[..., Any] | None = None
+    """Optional reward-shaping callable or dotted import path."""
 
     normalize_returns: bool = True
     """Whether to normalize returns across the collected rollout before optimization."""
@@ -87,10 +90,22 @@ class ReinforceCfg(BaseAgentCfg):
         validate_min("random_timesteps", self.random_timesteps, minimum=0)
         validate_min("grad_norm_clip", self.grad_norm_clip, minimum=0.0)
         validate_min("entropy_loss_scale", self.entropy_loss_scale, minimum=0.0)
-        validate_optional_callable("learning_rate_scheduler", self.learning_rate_scheduler)
-        validate_optional_callable("observation_preprocessor", self.observation_preprocessor)
-        validate_optional_callable("state_preprocessor", self.state_preprocessor)
-        validate_optional_callable("rewards_shaper", self.rewards_shaper)
+        self.learning_rate_scheduler = resolve_optional_class(
+            "learning_rate_scheduler",
+            self.learning_rate_scheduler,
+        )
+        self.observation_preprocessor = resolve_optional_class(
+            "observation_preprocessor",
+            self.observation_preprocessor,
+        )
+        self.state_preprocessor = resolve_optional_class(
+            "state_preprocessor",
+            self.state_preprocessor,
+        )
+        self.rewards_shaper = resolve_optional_callable(
+            "rewards_shaper",
+            self.rewards_shaper,
+        )
 
 
 @register_agent("reinforce")
@@ -146,12 +161,14 @@ class Reinforce(BaseAgent):
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=self.cfg.learning_rate)
         self.checkpoint_modules["optimizer"] = self.optimizer
 
-        self.scheduler = self.cfg.learning_rate_scheduler
-        if self.scheduler is not None:
-            self.scheduler = self.scheduler(
+        self.scheduler = None
+        scheduler_cls = self.cfg.learning_rate_scheduler
+        if scheduler_cls is not None:
+            self.scheduler = scheduler_cls(
                 self.optimizer,
                 **self.cfg.learning_rate_scheduler_kwargs,
             )
+            self.checkpoint_modules["scheduler"] = self.scheduler
 
         if self.cfg.observation_preprocessor:
             self._observation_preprocessor = self.cfg.observation_preprocessor(
