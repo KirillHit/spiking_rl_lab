@@ -9,7 +9,7 @@ from flatten_dict import flatten
 from skrl.trainers.torch import ParallelTrainer, SequentialTrainer, Trainer
 from skrl.utils import set_seed
 
-from spiking_rl_lab.agents import build_agent
+from spiking_rl_lab.agents import BaseAgent, build_agent
 from spiking_rl_lab.envs import build_env
 from spiking_rl_lab.models import build_models
 from spiking_rl_lab.utils.config import BaseConfig, RunnerMode
@@ -111,7 +111,9 @@ class Runner:
             msg = "Failed to create trainer"
             raise TrainerCreationError(msg) from exc
 
-    def _load_checkpoint_if_configured(self, *, agent, checkpoint_path: Path | None) -> None:  # noqa: ANN001
+    def _load_checkpoint_if_configured(
+        self, *, agent: BaseAgent, checkpoint_path: Path | None,
+    ) -> None:
         """Load agent weights from a checkpoint path if configured."""
         if checkpoint_path is None:
             return

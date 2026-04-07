@@ -7,7 +7,6 @@ import time
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
-from packaging import version
 from skrl import config
 from skrl.memories.torch import RandomMemory
 
