@@ -171,16 +171,22 @@ class Reinforce(BaseAgent):
             self.checkpoint_modules["scheduler"] = self.scheduler
 
         if self.cfg.observation_preprocessor:
+            observation_preprocessor_kwargs = dict(self.cfg.observation_preprocessor_kwargs)
+            observation_preprocessor_kwargs.setdefault("size", self.observation_space)
+            observation_preprocessor_kwargs.setdefault("device", self.device)
             self._observation_preprocessor = self.cfg.observation_preprocessor(
-                **self.cfg.observation_preprocessor_kwargs,
+                **observation_preprocessor_kwargs,
             )
             self.checkpoint_modules["observation_preprocessor"] = self._observation_preprocessor
         else:
             self._observation_preprocessor = self._empty_preprocessor
 
         if self.cfg.state_preprocessor:
+            state_preprocessor_kwargs = dict(self.cfg.state_preprocessor_kwargs)
+            state_preprocessor_kwargs.setdefault("size", self.state_space)
+            state_preprocessor_kwargs.setdefault("device", self.device)
             self._state_preprocessor = self.cfg.state_preprocessor(
-                **self.cfg.state_preprocessor_kwargs,
+                **state_preprocessor_kwargs,
             )
             self.checkpoint_modules["state_preprocessor"] = self._state_preprocessor
         else:

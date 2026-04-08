@@ -3,5 +3,6 @@ device: cpu
 params:
   rollouts: 16
   learning_rate: 3e-4
+  observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
   experiment:
     write_interval: 1000
