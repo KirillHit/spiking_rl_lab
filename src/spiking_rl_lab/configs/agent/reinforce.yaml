@@ -3,6 +3,9 @@ device: cpu
 params:
   rollouts: 16
   learning_rate: 3e-4
+  learning_rate_scheduler: torch.optim.lr_scheduler.CosineAnnealingLR
+  learning_rate_scheduler_kwargs:
+    T_max: 1875
   observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
   experiment:
     write_interval: 1000
