@@ -9,8 +9,6 @@ from dataclasses import asdict
 from enum import Enum
 from pathlib import Path
 
-import dagshub
-import httpx
 import mlflow
 import psutil
 import torch
@@ -22,11 +20,15 @@ log = logging.getLogger(__name__)
 
 def setup_mlflow(repo_owner: str, repo_name: str, experiment_name: str) -> None:
     """Initialize MLflow tracking against the configured DagsHub repository."""
+    import httpx
+
     mlflow.enable_system_metrics_logging()
 
     try:
+        import dagshub
+
         dagshub.init(repo_owner=repo_owner, repo_name=repo_name, mlflow=True)
-    except httpx.NetworkError:
+    except (httpx.NetworkError, ImportError):
         log.warning(
             "Failed to connect to DagsHub. Experiment logs will be stored locally: "
             "./experiments/mlflow.db",

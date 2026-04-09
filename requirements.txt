@@ -8,5 +8,4 @@ flatten_dict
 torch
 dagshub
 psutil
-
-skrl[torch] @ git+https://github.com/KirillHit/skrl.git@develop
+skrl==2.0.0

@@ -1,4 +1,5 @@
 use_parallel: false
+eval_timesteps: 10000
 params:
-  timesteps: 30000
+  timesteps: 20000
   headless: true

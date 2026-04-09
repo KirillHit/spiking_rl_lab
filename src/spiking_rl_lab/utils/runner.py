@@ -2,6 +2,7 @@
 
 import datetime
 import logging
+from dataclasses import replace
 from pathlib import Path
 
 import mlflow
@@ -72,6 +73,12 @@ class Runner:
 
                 log.info("Starting training...")
                 trainer.train()
+
+                best_checkpoint = cfg.runner.output_dir / "checkpoints" / "best_agent.pt"
+                if best_checkpoint.exists():
+                    self.evaluate(cfg, checkpoint_path=best_checkpoint)
+                else:
+                    log.warning("Best checkpoint was not found; skipping evaluation")
             except SpikingRLLabError:
                 log.exception("Training failed!")
             finally:
@@ -79,10 +86,20 @@ class Runner:
                 log_artifact_if_exists(cfg.runner.output_dir / "run.log")
                 log_artifact_if_exists(cfg.runner.output_dir / "checkpoints" / "best_agent.pt")
 
-    def evaluate(self, cfg: BaseConfig) -> None:
+    def evaluate(self, cfg: BaseConfig, checkpoint_path: Path | None = None) -> None:
         """Run the evaluation loop."""
-        trainer = self._generate_trainer(cfg)
+        eval_cfg = self._prepare_eval_config(cfg, checkpoint_path)
+        trainer = self._generate_trainer(eval_cfg)
+
+        log.info("Starting evaluation...")
         trainer.eval()
+
+        score = trainer.agents.last_tracking_metrics.get("Eval / Reward / Total reward_mean")
+        if score is None:
+            log.warning("Evaluation finished without a tracked total reward metric")
+            return
+
+        log.info("Evaluation mean reward: %.6g", score)
 
     def optimize(self, cfg: BaseConfig) -> None:
         """Run hyperparameter optimization."""
@@ -136,3 +153,27 @@ class Runner:
         """Generate a deterministic run name based on the experiment configuration."""
         ts = datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d_%H-%M-%S")
         return f"{ts}_{cfg.env.id}_{cfg.agent.name}"
+
+    def _prepare_eval_config(
+        self,
+        cfg: BaseConfig,
+        checkpoint_path: Path | None = None,
+    ) -> BaseConfig:
+        """Create a config for evaluation without mutating the original one."""
+        trainer_params = {**cfg.trainer.params, "timesteps": cfg.trainer.eval_timesteps}
+        agent_params = {**cfg.agent.params}
+        experiment = dict(agent_params.get("experiment", {}))
+        experiment["write_interval"] = cfg.trainer.eval_timesteps
+        agent_params["experiment"] = experiment
+
+        return replace(
+            cfg,
+            agent=replace(cfg.agent, params=agent_params),
+            runner=replace(
+                cfg.runner,
+                checkpoint_path=checkpoint_path
+                if checkpoint_path is not None
+                else cfg.runner.checkpoint_path,
+            ),
+            trainer=replace(cfg.trainer, params=trainer_params),
+        )
