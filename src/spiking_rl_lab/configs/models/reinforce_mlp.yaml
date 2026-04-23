@@ -1,4 +1,4 @@
 models:
-  - name: mlp_policy
-    role: policy
+  - role: policy
     device: cuda
+    model: {}

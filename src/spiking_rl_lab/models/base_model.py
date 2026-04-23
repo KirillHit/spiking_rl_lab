@@ -1,15 +1,20 @@
-"""Shared base classes for models."""
+"""Shared model configuration and concrete policy/value models."""
+
+from __future__ import annotations
 
 import dataclasses
-from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-import gymnasium as gym
 import torch
-from skrl.models.torch import Model
+from skrl.models.torch import CategoricalMixin, DeterministicMixin, GaussianMixin, Model
+from torch import nn
+
+if TYPE_CHECKING:
+    import gymnasium
+    import gymnasium as gym
 
 
-@dataclasses.dataclass(kw_only=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class BaseModelCfg:
     """Common configuration shared by all models."""
 
@@ -23,15 +28,36 @@ class BaseModelCfg:
     max_log_std: float = 2
     reduction: Literal["mean", "sum", "prod", "none"] = "sum"
 
+    # Network architecture parameters
+    net_arch: dict[str, Any] = dataclasses.field(default_factory=dict)
+    log_std_init: float = 0.0
 
-class BaseModel(Model, ABC):
-    """Abstract base class for spiking RL models."""
 
-    cfg_cls: ClassVar[type[BaseModelCfg]] = BaseModelCfg
+def _get_observations(inputs: dict[str, torch.Tensor]) -> torch.Tensor:
+    """Get flattened observations from model inputs.
+
+    Args:
+        inputs: Model inputs.
+
+    Returns:
+        Observation tensor.
+
+    Raises:
+        KeyError: If observations are missing.
+
+    """
+    observations = inputs.get("observations")
+    if observations is None:
+        msg = "Model inputs must contain 'observations'"
+        raise KeyError(msg)
+    return observations.view(observations.shape[0], -1)
+
+
+class BaseModel(Model):
+    """Common base class for spiking RL models."""
 
     def __init__(
         self,
-        *,
         cfg: BaseModelCfg,
         observation_space: gym.Space | None = None,
         state_space: gym.Space | None = None,
@@ -54,7 +80,8 @@ class BaseModel(Model, ABC):
             action_space=action_space,
             device=device,
         )
-        self.cfg = cfg
+        self._cfg = cfg
+        self._net = None  # use generator
 
     def act(self, inputs: dict[str, Any], *, role: str = "") -> tuple[torch.Tensor, dict[str, Any]]:
         """Run default action path.
@@ -73,25 +100,46 @@ class BaseModel(Model, ABC):
         return self.compute(inputs, role=role)
 
 
-class PolicyModel(BaseModel, ABC):
-    """Base class for policy models.
+class CategoricalPolicyModel(CategoricalMixin, BaseModel):
+    """Categorical policy model for discrete action spaces."""
 
-    Subclasses are expected to implement the policy hook that matches the
-    action space selected by the builder:
+    def __init__(
+        self,
+        cfg: BaseModelCfg,
+        observation_space: gymnasium.Space | None = None,
+        state_space: gymnasium.Space | None = None,
+        action_space: gymnasium.Space | None = None,
+        device: str | torch.device | None = None,
+    ) -> None:
+        """Initialize categorical policy model.
 
-    - ``compute_categorical`` for discrete action spaces
-    - ``compute_gaussian`` for continuous stochastic action spaces
-    - ``compute_deterministic`` for continuous deterministic action spaces
+        Args:
+            cfg: Model configuration.
+            observation_space: Observation space.
+            state_space: State space.
+            action_space: Action space.
+            device: Device for tensors and modules.
 
-    The builder wraps this class with the corresponding skrl mixin.
-    """
+        """
+        BaseModel.__init__(
+            self,
+            cfg=cfg,
+            observation_space=observation_space,
+            state_space=state_space,
+            action_space=action_space,
+            device=device,
+        )
+        CategoricalMixin.__init__(
+            self,
+            unnormalized_log_prob=self._cfg.unnormalized_log_prob,
+        )
 
-    def compute_categorical(
+    def compute(
         self,
         inputs: dict[str, Any],
-        role: str,
+        role: str = "",
     ) -> tuple[torch.Tensor, dict[str, Any]]:
-        """Compute categorical policy logits.
+        """Compute categorical policy output.
 
         Args:
             inputs: Model inputs.
@@ -100,19 +148,58 @@ class PolicyModel(BaseModel, ABC):
         Returns:
             Policy logits and extra outputs.
 
-        Raises:
-            NotImplementedError: If the hook is not implemented.
+        """
+        return self._net(_get_observations(inputs)), {}
+
+
+class GaussianPolicyModel(GaussianMixin, BaseModel):
+    """Gaussian policy model for continuous stochastic action spaces."""
+
+    def __init__(
+        self,
+        cfg: BaseModelCfg,
+        observation_space: gymnasium.Space | None = None,
+        state_space: gymnasium.Space | None = None,
+        action_space: gymnasium.Space | None = None,
+        device: str | torch.device | None = None,
+    ) -> None:
+        """Initialize Gaussian policy model.
+
+        Args:
+            cfg: Model configuration.
+            observation_space: Observation space.
+            state_space: State space.
+            action_space: Action space.
+            device: Device for tensors and modules.
 
         """
-        msg = f"{type(self).__name__} does not implement compute_categorical()"
-        raise NotImplementedError(msg)
+        BaseModel.__init__(
+            self,
+            cfg=cfg,
+            observation_space=observation_space,
+            state_space=state_space,
+            action_space=action_space,
+            device=device,
+        )
+        self._log_std_parameter = nn.Parameter(
+            torch.full((self.num_actions,), self._cfg.log_std_init, device=self.device),
+        )
+        GaussianMixin.__init__(
+            self,
+            clip_actions=self._cfg.clip_actions,
+            clip_mean_actions=self._cfg.clip_mean_actions,
+            clip_log_std=self._cfg.clip_log_std,
+            min_log_std=self._cfg.min_log_std,
+            max_log_std=self._cfg.max_log_std,
+            reduction=self._cfg.reduction,
+        )
 
-    def compute_gaussian(
+    def compute(
         self,
         inputs: dict[str, Any],
-        role: str,
+        role: str = "",
     ) -> tuple[torch.Tensor, dict[str, Any]]:
-        """Compute Gaussian policy parameters.
+        """Compute Gaussian policy output.
 
         Args:
             inputs: Model inputs.
@@ -121,19 +208,52 @@ class PolicyModel(BaseModel, ABC):
         Returns:
             Mean actions and extra outputs with ``log_std``.
 
-        Raises:
-            NotImplementedError: If the hook is not implemented.
+        """
+        mean_actions = self._net(_get_observations(inputs))
+        log_std = self._log_std_parameter.expand_as(mean_actions)
+        return mean_actions, {"log_std": log_std}
+
+
+class DeterministicPolicyModel(DeterministicMixin, BaseModel):
+    """Deterministic policy model for continuous action spaces."""
+
+    def __init__(
+        self,
+        cfg: BaseModelCfg,
+        observation_space: gymnasium.Space | None = None,
+        state_space: gymnasium.Space | None = None,
+        action_space: gymnasium.Space | None = None,
+        device: str | torch.device | None = None,
+    ) -> None:
+        """Initialize deterministic policy model.
+
+        Args:
+            cfg: Model configuration.
+            observation_space: Observation space.
+            state_space: State space.
+            action_space: Action space.
+            device: Device for tensors and modules.
 
         """
-        msg = f"{type(self).__name__} does not implement compute_gaussian()"
-        raise NotImplementedError(msg)
+        BaseModel.__init__(
+            self,
+            cfg=cfg,
+            observation_space=observation_space,
+            state_space=state_space,
+            action_space=action_space,
+            device=device,
+        )
+        DeterministicMixin.__init__(
+            self,
+            clip_actions=self._cfg.clip_actions,
+        )
 
-    def compute_deterministic(
+    def compute(
         self,
         inputs: dict[str, Any],
-        role: str,
+        role: str = "",
     ) -> tuple[torch.Tensor, dict[str, Any]]:
-        """Compute deterministic policy actions.
+        """Compute deterministic policy output.
 
         Args:
             inputs: Model inputs.
@@ -142,20 +262,38 @@ class PolicyModel(BaseModel, ABC):
         Returns:
             Actions and extra outputs.
 
-        Raises:
-            NotImplementedError: If the hook is not implemented.
+        """
+        return self._net(_get_observations(inputs)), {}
+
+
+class ValueModel(BaseModel):
+    """Dense value model with spiking hidden activations."""
+
+    def __init__(
+        self,
+        cfg: BaseModelCfg,
+        observation_space: gymnasium.Space | None = None,
+        state_space: gymnasium.Space | None = None,
+        action_space: gymnasium.Space | None = None,
+        device: str | torch.device | None = None,
+    ) -> None:
+        """Initialize model.
+
+        Args:
+            observation_space: Observation space.
+            state_space: State space.
+            action_space: Action space.
+            device: Device for tensors and modules.
+            cfg: Model configuration.
 
         """
-        msg = f"{type(self).__name__} does not implement compute_deterministic()"
-        raise NotImplementedError(msg)
-
-
-class ValueModel(BaseModel, ABC):
-    """Base class for value models.
-
-    Subclasses implement ``compute_value``. The default ``compute`` forwards to
-    that method, so the builder can instantiate value models directly.
-    """
+        super().__init__(
+            observation_space=observation_space,
+            state_space=state_space,
+            action_space=action_space,
+            device=device,
+            cfg=cfg,
+        )
 
     def compute(
         self,
@@ -173,26 +311,4 @@ class ValueModel(BaseModel, ABC):
             Value tensor and extra outputs.
 
         """
-        return self.compute_value(inputs, role)
-
-    @abstractmethod
-    def compute_value(
-        self,
-        inputs: dict[str, Any],
-        role: str,
-    ) -> tuple[torch.Tensor, dict[str, Any]]:
-        """Compute value estimates.
-
-        Args:
-            inputs: Model inputs.
-            role: Model role.
-
-        Returns:
-            Value tensor and extra outputs.
-
-        Raises:
-            NotImplementedError: If the hook is not implemented.
-
-        """
-        msg = f"{type(self).__name__} does not implement compute_value()"
-        raise NotImplementedError(msg)
+        return self._net(_get_observations(inputs)), {}

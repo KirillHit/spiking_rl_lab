@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from skrl.models.torch import Model
 
 
-@dataclasses.dataclass(kw_only=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class BaseAgentCfg(AgentCfg):
     """Base class for the agent's configuration."""
 

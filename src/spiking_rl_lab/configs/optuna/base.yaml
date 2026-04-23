@@ -6,6 +6,3 @@ parameters:
     low: 1e-5
     high: 1e-2
     log: true
-  - parameter: "policy.params.net_arch"
-    type: "categorical"
-    choices: [[64, 64], [128, 128], [256, 256]]

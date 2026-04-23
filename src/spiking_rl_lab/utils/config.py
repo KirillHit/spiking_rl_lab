@@ -8,6 +8,8 @@ from typing import Any
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
+from spiking_rl_lab.models.base_model import BaseModelCfg
+
 
 class EnvBackend(StrEnum):
     """Supported environment backends."""
@@ -45,7 +47,6 @@ class ModelRole(StrEnum):
 class ModelConfig:
     """Configuration for a single model instance."""
 
-    name: str = MISSING
     role: ModelRole = MISSING
     device: str = "cpu"
     gaussian: bool = True
@@ -54,7 +55,7 @@ class ModelConfig:
     If False, DeterministicMixin will be used instead.
     """
 
-    params: dict[str, Any] = field(default_factory=dict)
+    model: BaseModelCfg = field(default_factory=BaseModelCfg)
 
 
 @dataclass(slots=True)

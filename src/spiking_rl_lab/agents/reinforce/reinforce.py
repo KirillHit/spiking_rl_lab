@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from skrl.models.torch import Model
 
 
-@dataclasses.dataclass(kw_only=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class ReinforceCfg(BaseAgentCfg):
     """Configuration for the REINFORCE agent."""
 
@@ -43,7 +43,7 @@ class ReinforceCfg(BaseAgentCfg):
     """Reward discount factor used to compute Monte Carlo returns."""
 
     learning_rate: float = 1e-3
-    """Adam optimizer learning rate."""
+    """Adamax optimizer learning rate."""
 
     learning_rate_scheduler: str | type[Any] | None = None
     """Optional learning rate scheduler class or dotted import path."""
@@ -158,7 +158,7 @@ class Reinforce(BaseAgent):
             enabled=self.cfg.mixed_precision,
         )
 
-        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=self.cfg.learning_rate)
+        self.optimizer = torch.optim.Adamax(self.policy.parameters(), lr=self.cfg.learning_rate)
         self.checkpoint_modules["optimizer"] = self.optimizer
 
         self.scheduler = None

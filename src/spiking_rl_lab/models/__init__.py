@@ -1,7 +1,21 @@
 """Model implementations."""
 
-from .base_model import BaseModel
-from .builder import build_models, register_model
-from .mlp import MLPCfg, MLPPolicy, MLPValue
+from .base_model import (
+    BaseModel,
+    BaseModelCfg,
+    CategoricalPolicyModel,
+    DeterministicPolicyModel,
+    GaussianPolicyModel,
+    ValueModel,
+)
+from .builder import build_models
 
-__all__ = ["BaseModel", "MLPCfg", "MLPPolicy", "MLPValue", "build_models", "register_model"]
+__all__ = [
+    "BaseModel",
+    "BaseModelCfg",
+    "CategoricalPolicyModel",
+    "DeterministicPolicyModel",
+    "GaussianPolicyModel",
+    "ValueModel",
+    "build_models",
+]
