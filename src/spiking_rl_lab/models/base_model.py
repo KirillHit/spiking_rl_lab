@@ -27,9 +27,6 @@ class BaseModelCfg:
     min_log_std: float = -20
     max_log_std: float = 2
     reduction: Literal["mean", "sum", "prod", "none"] = "sum"
-
-    # Network architecture parameters
-    net_arch: dict[str, Any] = dataclasses.field(default_factory=dict)
     log_std_init: float = 0.0
 
 

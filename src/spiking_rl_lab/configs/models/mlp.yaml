@@ -1,5 +1,6 @@
 models:
   - role: policy
+    policy_type: stochastic
     device: cpu
     model: {}
   - role: value

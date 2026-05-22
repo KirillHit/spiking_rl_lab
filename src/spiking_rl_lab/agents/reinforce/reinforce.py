@@ -12,6 +12,7 @@ from skrl.memories.torch import RandomMemory
 
 from spiking_rl_lab.agents.base_agent import BaseAgent, BaseAgentCfg
 from spiking_rl_lab.agents.builder import register_agent
+from spiking_rl_lab.utils.config import PolicyType
 from spiking_rl_lab.utils.validation import (
     resolve_optional_callable,
     resolve_optional_class,
@@ -113,6 +114,9 @@ class Reinforce(BaseAgent):
     """REINFORCE agent implementation."""
 
     cfg_cls: ClassVar[type[ReinforceCfg]] = ReinforceCfg
+    model_requirements: ClassVar[dict[str, PolicyType | None]] = {
+        "policy": PolicyType.stochastic,
+    }
 
     def build_memory(self, *, env: Wrapper) -> Memory | None:
         """Build rollout memory sized for at least one REINFORCE update window."""

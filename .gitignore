@@ -222,3 +222,4 @@ mlruns
 !src/spiking_rl_lab/configs/env
 experiments
 .codex
+AGENTS.md

@@ -17,5 +17,9 @@ class AgentCreationError(SpikingRLLabError):
     """Raised when an agent cannot be created."""
 
 
+class NetworkCreationError(SpikingRLLabError):
+    """Raised when a network cannot be created."""
+
+
 class TrainerCreationError(SpikingRLLabError):
     """Raised when a trainer cannot be created."""

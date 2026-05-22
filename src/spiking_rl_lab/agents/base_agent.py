@@ -11,6 +11,14 @@ import mlflow
 import numpy as np
 from skrl.agents.torch import Agent, AgentCfg
 
+from spiking_rl_lab.models.base_model import (
+    CategoricalPolicyModel,
+    DeterministicPolicyModel,
+    GaussianPolicyModel,
+)
+from spiking_rl_lab.utils.config import PolicyType
+from spiking_rl_lab.utils.exception import AgentCreationError
+
 if TYPE_CHECKING:
     import gymnasium
     import torch
@@ -28,6 +36,36 @@ class BaseAgent(Agent, ABC):
     """Common utilities for agents used in this project."""
 
     cfg_cls: ClassVar[type[BaseAgentCfg]] = BaseAgentCfg
+    model_requirements: ClassVar[dict[str, PolicyType | None]] = {}
+
+    @classmethod
+    def _validate_models(cls, models: dict[str, Model]) -> None:
+        """Validate that supplied models satisfy this agent's requirements."""
+        for role, policy_type in cls.model_requirements.items():
+            model = models.get(role)
+            if model is None:
+                msg = f"Agent '{cls.__name__}' requires model role '{role}'"
+                raise AgentCreationError(msg)
+
+            if policy_type is PolicyType.stochastic and not isinstance(
+                model,
+                (CategoricalPolicyModel, GaussianPolicyModel),
+            ):
+                msg = (
+                    f"Agent '{cls.__name__}' requires a stochastic policy model for role "
+                    f"'{role}', got {type(model).__name__}"
+                )
+                raise AgentCreationError(msg)
+
+            if policy_type is PolicyType.deterministic and not isinstance(
+                model,
+                DeterministicPolicyModel,
+            ):
+                msg = (
+                    f"Agent '{cls.__name__}' requires a deterministic policy model for role "
+                    f"'{role}', got {type(model).__name__}"
+                )
+                raise AgentCreationError(msg)
 
     def __init__(
         self,
@@ -41,6 +79,7 @@ class BaseAgent(Agent, ABC):
         device: str | torch.device | None = None,
     ) -> None:
         """Initialize common tracking state."""
+        self._validate_models(models)
         super().__init__(
             cfg=cfg,
             models=models,

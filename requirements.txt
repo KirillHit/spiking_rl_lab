@@ -5,7 +5,9 @@ gymnasium[classic-control, mujoco]
 tensorboard
 mlflow
 flatten_dict
+numpy
 torch
 dagshub
 psutil
 skrl==2.0.0
+norse==1.1.0

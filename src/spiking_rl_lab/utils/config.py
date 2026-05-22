@@ -43,16 +43,31 @@ class ModelRole(StrEnum):
     value = "value"
 
 
+class PolicyType(StrEnum):
+    """Policy semantics required by an agent."""
+
+    stochastic = "stochastic"
+    deterministic = "deterministic"
+
+
+@dataclass(slots=True)
+class NetworkNodeCfg:
+    """Configuration for a single network node in ``net_arch``."""
+
+    type: str = MISSING
+    params: dict[str, Any] = field(default_factory=dict)
+
+
 @dataclass(slots=True)
 class ModelConfig:
     """Configuration for a single model instance."""
 
     role: ModelRole = MISSING
     device: str = "cpu"
-    gaussian: bool = True
+    policy_type: PolicyType = PolicyType.stochastic
     """
-    Whether to use Gaussian policies for continuous action spaces.
-    If False, DeterministicMixin will be used instead.
+    Policy semantics for policy models.
+    Ignored for non-policy model roles.
     """
 
     model: BaseModelCfg = field(default_factory=BaseModelCfg)

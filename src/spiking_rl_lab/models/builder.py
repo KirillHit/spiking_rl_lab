@@ -8,12 +8,13 @@ from typing import TYPE_CHECKING
 import gymnasium as gym
 
 from spiking_rl_lab.models.base_model import (
+    BaseModel,
     CategoricalPolicyModel,
     DeterministicPolicyModel,
     GaussianPolicyModel,
     ValueModel,
 )
-from spiking_rl_lab.utils.config import ModelRole
+from spiking_rl_lab.utils.config import ModelRole, PolicyType
 from spiking_rl_lab.utils.exception import ModelCreationError
 
 if TYPE_CHECKING:
@@ -25,12 +26,12 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-def _select_policy_class(action_space: gym.Space, *, gaussian: bool = True) -> type:
+def _select_policy_class(action_space: gym.Space, *, policy_type: PolicyType) -> type[BaseModel]:
     """Select policy model class for the action space.
 
     Args:
         action_space: Environment action space.
-        gaussian: Whether continuous policies should be stochastic.
+        policy_type: Policy semantics required by the agent.
 
     Returns:
         A concrete policy model class.
@@ -40,9 +41,16 @@ def _select_policy_class(action_space: gym.Space, *, gaussian: bool = True) -> t
 
     """
     if isinstance(action_space, (gym.spaces.Discrete, gym.spaces.MultiDiscrete)):
+        if policy_type is PolicyType.deterministic:
+            msg = "Deterministic policy model is unsupported for discrete action spaces"
+            raise ModelCreationError(msg)
         return CategoricalPolicyModel
     if isinstance(action_space, gym.spaces.Box):
-        return GaussianPolicyModel if gaussian else DeterministicPolicyModel
+        return (
+            GaussianPolicyModel
+            if policy_type is PolicyType.stochastic
+            else DeterministicPolicyModel
+        )
 
     msg = f"Unsupported action_space for policy model: {type(action_space)}"
     raise ModelCreationError(msg)
@@ -76,7 +84,7 @@ def build_models(cfg: ModelsConfig, env: Wrapper) -> dict[str, Model]:
             raise ModelCreationError(msg)
 
         if model_cfg.role is ModelRole.policy:
-            cls = _select_policy_class(action_space, gaussian=model_cfg.gaussian)
+            cls = _select_policy_class(action_space, policy_type=model_cfg.policy_type)
         elif model_cfg.role is ModelRole.value:
             cls = ValueModel
         else:

@@ -1,4 +1,5 @@
 models:
   - role: policy
+    policy_type: stochastic
     device: cuda
     model: {}
