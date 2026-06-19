@@ -1,19 +1,28 @@
-[build-system]
-requires = ["hatchling>=1.25", "hatch-requirements-txt"]
-build-backend = "hatchling.build"
-
 [project]
-name = "spiking_rl_lab"
-version = "1.0.0"
-authors = [
-  { name="Kirill Khitushkin", email="khitushkink@mail.ru" },
-]
+name = "spiking-rl-lab"
+version = "0.1.0"
 description = "Experimental framework for reinforcement learning with spiking neural network policies, supporting multiple algorithms, configurable training pipelines, and reproducible experimentation."
 readme = "README.md"
+authors = [
+    { name = "Kirill Hitushkin", email = "khitushkink@mail.ru" }
+]
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
-dynamic = ["dependencies"]
+dependencies = [
+    "colorlog>=6.10.1",
+    "dagshub>=0.7.0",
+    "flatten-dict>=0.5.0",
+    "gymnasium[classic-control,mujoco]>=1.3.0",
+    "hydra-core>=1.3.3",
+    "mlflow>=3.14.0",
+    "norse>=1.1.0",
+    "numpy>=2.4.6",
+    "optuna>=4.9.0",
+    "psutil>=7.2.2",
+    "skrl>=2.1.0",
+    "torch>=2.12.1",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/KirillHit/spiking_rl_lab"
@@ -21,35 +30,9 @@ dynamic = ["dependencies"]
 [project.scripts]
 spiking-rl-lab = "spiking_rl_lab.run:main"
 
-# -------------------------
-# Hatch build configuration
-# -------------------------
-[tool.hatch.build.targets.wheel]
-packages = ["src/spiking_rl_lab"]
-exclude = [
-  "**/__pycache__/**",
-]
-
-# -------------------------
-# Hatch configuration
-# -------------------------
-[tool.hatch.metadata]
-allow-direct-references = true
-[tool.hatch.envs.base.scripts]
-run = "spiking-rl-lab"
-
-[tool.hatch.envs.lint]
-extra-dependencies = ["ruff"]
-
-[tool.hatch.envs.lint.scripts]
-ruff_check = "ruff check ."
-ruff_format = "ruff format --check ."
-
-# ----------------------------------
-# Dependencies from requirements.txt
-# ----------------------------------
-[tool.hatch.metadata.hooks.requirements_txt]
-files = ["requirements.txt"]
+[build-system]
+requires = ["uv_build>=0.9.27,<0.10.0"]
+build-backend = "uv_build"
 
 # -------------------
 # Formatting / lint
