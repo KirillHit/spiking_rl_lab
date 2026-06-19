@@ -1,0 +1,24 @@
+policy_mlp:
+  name: sequential
+  params:
+    nodes:
+      - name: linear
+        params:
+          out_features: 64
+      - name: lif
+        params: {}
+      - name: linear
+        params:
+          out_features: 2
+value_mlp:
+  name: sequential
+  params:
+    nodes:
+      - name: linear
+        params:
+          out_features: 64
+      - name: lif
+        params: {}
+      - name: linear
+        params:
+          out_features: 1

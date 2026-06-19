@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any, ClassVar, get_args, get_origin
 import torch
 from torch import nn
 
+from spiking_rl_lab.core.factory import ConfiguredBase
+
 if TYPE_CHECKING:
     from spiking_rl_lab.network.shape import TensorShape
 
@@ -21,10 +23,10 @@ class BaseNodeCfg:
     """Base node configuration."""
 
 
-class BaseNode[CfgT: BaseNodeCfg](ABC, nn.Module):
+class BaseNode[CfgT: BaseNodeCfg](nn.Module, ConfiguredBase, ABC):
     """Base class for network nodes."""
 
-    cfg_cls: ClassVar[type[BaseNodeCfg]] = BaseNodeCfg
+    Config: ClassVar[type[BaseNodeCfg]] = BaseNodeCfg
 
     def __init_subclass__(cls, **kwargs: object) -> None:
         """Infer config class from ``BaseNode[Cfg]`` annotation."""
@@ -37,13 +39,13 @@ class BaseNode[CfgT: BaseNodeCfg](ABC, nn.Module):
 
             args = get_args(base)
             if args and isinstance(args[0], type) and issubclass(args[0], BaseNodeCfg):
-                cls.cfg_cls = args[0]
+                cls.Config = args[0]
                 return
 
     def __init__(self, cfg: CfgT, input_shape: TensorShape) -> None:
         """Store node configuration."""
         super().__init__()
-        self._cfg: CfgT = cfg
+        ConfiguredBase.__init__(self, cfg)
         self._input_shape = input_shape
         self._output_shape = input_shape
 

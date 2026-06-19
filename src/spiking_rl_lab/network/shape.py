@@ -8,7 +8,7 @@ from enum import StrEnum
 
 import numpy as np
 
-from spiking_rl_lab.utils.validation import validate_positive
+from spiking_rl_lab.core.validation import require_positive
 
 
 class TensorShapeKind(StrEnum):
@@ -76,7 +76,7 @@ class DenseTensorShape(TensorShape):
 
     def __post_init__(self) -> None:
         """Validate shape dimensions."""
-        validate_positive("DenseTensorShape.features", self.features)
+        require_positive("DenseTensorShape.features", self.features)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True, slots=True)
@@ -103,8 +103,8 @@ class SequenceTensorShape(TensorShape):
 
     def __post_init__(self) -> None:
         """Validate shape dimensions."""
-        validate_positive("SequenceTensorShape.channels", self.channels)
-        validate_positive("SequenceTensorShape.length", self.length)
+        require_positive("SequenceTensorShape.channels", self.channels)
+        require_positive("SequenceTensorShape.length", self.length)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True, slots=True)
@@ -132,6 +132,6 @@ class ImageTensorShape(TensorShape):
 
     def __post_init__(self) -> None:
         """Validate shape dimensions."""
-        validate_positive("ImageTensorShape.channels", self.channels)
-        validate_positive("ImageTensorShape.height", self.height)
-        validate_positive("ImageTensorShape.width", self.width)
+        require_positive("ImageTensorShape.channels", self.channels)
+        require_positive("ImageTensorShape.height", self.height)
+        require_positive("ImageTensorShape.width", self.width)

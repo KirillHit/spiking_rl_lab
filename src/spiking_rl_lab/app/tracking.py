@@ -13,7 +13,7 @@ import mlflow
 import psutil
 import torch
 
-from spiking_rl_lab.utils.config import BaseConfig
+from spiking_rl_lab.app.config import BaseConfig
 
 log = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ def log_hardware_info(folder: Path) -> None:
 def config_to_dict(cfg: BaseConfig) -> dict:
     """Convert the Hydra config dataclass to a JSON-serializable dict."""
 
-    def normalize(obj):  # noqa: ANN001, ANN202
+    def normalize(obj: object) -> object:
         """Recursively normalize enums, paths, and containers."""
         if isinstance(obj, Enum):
             return obj.value

@@ -8,6 +8,7 @@ from typing import Literal
 import torch
 from torch import nn
 
+from spiking_rl_lab.core.exception import NetworkCreationError
 from spiking_rl_lab.network.nodes.base_node import BaseNode, BaseNodeCfg, ListState
 from spiking_rl_lab.network.nodes.register import register_node
 from spiking_rl_lab.network.shape import (
@@ -16,7 +17,6 @@ from spiking_rl_lab.network.shape import (
     SequenceTensorShape,
     TensorShape,
 )
-from spiking_rl_lab.utils.exception import NetworkCreationError
 
 _PAIR_SIZE = 2
 

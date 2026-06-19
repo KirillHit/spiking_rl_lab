@@ -8,7 +8,7 @@ from .base_model import (
     GaussianPolicyModel,
     ValueModel,
 )
-from .builder import build_models
+from .builder import ModelConfig, ModelRole, PolicyType, build_models, register_model
 
 __all__ = [
     "BaseModel",
@@ -16,6 +16,10 @@ __all__ = [
     "CategoricalPolicyModel",
     "DeterministicPolicyModel",
     "GaussianPolicyModel",
+    "ModelConfig",
+    "ModelRole",
+    "PolicyType",
     "ValueModel",
     "build_models",
+    "register_model",
 ]

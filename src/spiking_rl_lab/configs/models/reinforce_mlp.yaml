@@ -1,5 +1,6 @@
-models:
-  - role: policy
-    policy_type: stochastic
-    device: cuda
-    model: {}
+- role: policy
+  name: auto
+  policy_type: stochastic
+  device: cuda
+  network: policy_mlp
+  params: {}

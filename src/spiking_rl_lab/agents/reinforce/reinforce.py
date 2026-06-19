@@ -12,14 +12,14 @@ from skrl.memories.torch import RandomMemory
 
 from spiking_rl_lab.agents.base_agent import BaseAgent, BaseAgentCfg
 from spiking_rl_lab.agents.builder import register_agent
-from spiking_rl_lab.utils.config import PolicyType
-from spiking_rl_lab.utils.validation import (
-    resolve_optional_callable,
-    resolve_optional_class,
-    validate_min,
-    validate_positive,
-    validate_range,
+from spiking_rl_lab.core.validation import (
+    require_minimum,
+    require_optional_callable,
+    require_optional_class,
+    require_positive,
+    require_range,
 )
+from spiking_rl_lab.models.builder import PolicyType
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -84,26 +84,26 @@ class ReinforceCfg(BaseAgentCfg):
 
     def __post_init__(self) -> None:
         """Validate REINFORCE hyperparameters after dataclass initialization."""
-        validate_min("rollouts", self.rollouts, minimum=1)
-        validate_min("mini_batches", self.mini_batches, minimum=1)
-        validate_range("discount_factor", self.discount_factor, minimum=0.0, maximum=1.0)
-        validate_positive("learning_rate", self.learning_rate)
-        validate_min("random_timesteps", self.random_timesteps, minimum=0)
-        validate_min("grad_norm_clip", self.grad_norm_clip, minimum=0.0)
-        validate_min("entropy_loss_scale", self.entropy_loss_scale, minimum=0.0)
-        self.learning_rate_scheduler = resolve_optional_class(
+        require_minimum("rollouts", self.rollouts, minimum=1)
+        require_minimum("mini_batches", self.mini_batches, minimum=1)
+        require_range("discount_factor", self.discount_factor, minimum=0.0, maximum=1.0)
+        require_positive("learning_rate", self.learning_rate)
+        require_minimum("random_timesteps", self.random_timesteps, minimum=0)
+        require_minimum("grad_norm_clip", self.grad_norm_clip, minimum=0.0)
+        require_minimum("entropy_loss_scale", self.entropy_loss_scale, minimum=0.0)
+        self.learning_rate_scheduler = require_optional_class(
             "learning_rate_scheduler",
             self.learning_rate_scheduler,
         )
-        self.observation_preprocessor = resolve_optional_class(
+        self.observation_preprocessor = require_optional_class(
             "observation_preprocessor",
             self.observation_preprocessor,
         )
-        self.state_preprocessor = resolve_optional_class(
+        self.state_preprocessor = require_optional_class(
             "state_preprocessor",
             self.state_preprocessor,
         )
-        self.rewards_shaper = resolve_optional_callable(
+        self.rewards_shaper = require_optional_callable(
             "rewards_shaper",
             self.rewards_shaper,
         )
@@ -113,7 +113,7 @@ class ReinforceCfg(BaseAgentCfg):
 class Reinforce(BaseAgent):
     """REINFORCE agent implementation."""
 
-    cfg_cls: ClassVar[type[ReinforceCfg]] = ReinforceCfg
+    Config: ClassVar[type[ReinforceCfg]] = ReinforceCfg
     model_requirements: ClassVar[dict[str, PolicyType | None]] = {
         "policy": PolicyType.stochastic,
     }
@@ -129,6 +129,7 @@ class Reinforce(BaseAgent):
 
     def __init__(
         self,
+        cfg: ReinforceCfg,
         *,
         models: dict[str, Model],
         memory: Memory | None,
@@ -136,18 +137,17 @@ class Reinforce(BaseAgent):
         state_space: gymnasium.Space | None,
         action_space: gymnasium.Space | None,
         device: str | torch.device | None,
-        cfg: ReinforceCfg,
     ) -> None:
         """REINFORCE agent implementation."""
         self.cfg: ReinforceCfg
         super().__init__(
+            cfg,
             models=models,
             memory=memory,
             observation_space=observation_space,
             state_space=state_space,
             action_space=action_space,
             device=device,
-            cfg=cfg,
         )
 
         self.policy = self.models["policy"]

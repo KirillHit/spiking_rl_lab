@@ -1,21 +1,20 @@
 """Experiment runner coordinating environment, model, agent, and trainer lifecycle."""
 
+from __future__ import annotations
+
 import datetime
 import logging
 from dataclasses import replace
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import mlflow
 from flatten_dict import flatten
 from skrl.trainers.torch import ParallelTrainer, SequentialTrainer, Trainer
 from skrl.utils import set_seed
 
-from spiking_rl_lab.agents import BaseAgent, build_agent
-from spiking_rl_lab.envs import build_env
-from spiking_rl_lab.models import build_models
-from spiking_rl_lab.utils.config import BaseConfig, RunnerMode
-from spiking_rl_lab.utils.exception import SpikingRLLabError, TrainerCreationError
-from spiking_rl_lab.utils.mlflow import (
+from spiking_rl_lab.agents.builder import build_agent
+from spiking_rl_lab.app.config import BaseConfig, RunnerMode
+from spiking_rl_lab.app.tracking import (
     config_to_dict,
     log_artifact_if_exists,
     log_environment_packages,
@@ -24,6 +23,14 @@ from spiking_rl_lab.utils.mlflow import (
     log_model_metadata,
     setup_mlflow,
 )
+from spiking_rl_lab.core.exception import SpikingRLLabError, TrainerCreationError
+from spiking_rl_lab.envs import build_env
+from spiking_rl_lab.models import build_models
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from spiking_rl_lab.agents.base_agent import BaseAgent
 
 log = logging.getLogger(__name__)
 
@@ -116,7 +123,7 @@ class Runner:
 
         """
         env = build_env(cfg.env)
-        models = build_models(cfg.models, env)
+        models = build_models(cfg.models, cfg.networks, env)
         agent = build_agent(cfg.agent, env, models)
         agent.experiment_dir = cfg.runner.output_dir
         self._load_checkpoint_if_configured(agent=agent, checkpoint_path=cfg.runner.checkpoint_path)
@@ -152,7 +159,8 @@ class Runner:
     def _generate_run_name(self, cfg: BaseConfig) -> str:
         """Generate a deterministic run name based on the experiment configuration."""
         ts = datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d_%H-%M-%S")
-        return f"{ts}_{cfg.env.id}_{cfg.agent.name}"
+        env_id = cfg.env.params.get("id", cfg.env.name)
+        return f"{ts}_{env_id}_{cfg.agent.name}"
 
     def _prepare_eval_config(
         self,

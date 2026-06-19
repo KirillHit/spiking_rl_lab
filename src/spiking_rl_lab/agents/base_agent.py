@@ -11,13 +11,14 @@ import mlflow
 import numpy as np
 from skrl.agents.torch import Agent, AgentCfg
 
+from spiking_rl_lab.core.exception import AgentCreationError
+from spiking_rl_lab.core.factory import ConfiguredBase
 from spiking_rl_lab.models.base_model import (
     CategoricalPolicyModel,
     DeterministicPolicyModel,
     GaussianPolicyModel,
 )
-from spiking_rl_lab.utils.config import PolicyType
-from spiking_rl_lab.utils.exception import AgentCreationError
+from spiking_rl_lab.models.builder import PolicyType
 
 if TYPE_CHECKING:
     import gymnasium
@@ -32,10 +33,10 @@ class BaseAgentCfg(AgentCfg):
     """Base class for the agent's configuration."""
 
 
-class BaseAgent(Agent, ABC):
+class BaseAgent(Agent, ConfiguredBase, ABC):
     """Common utilities for agents used in this project."""
 
-    cfg_cls: ClassVar[type[BaseAgentCfg]] = BaseAgentCfg
+    Config: ClassVar[type[BaseAgentCfg]] = BaseAgentCfg
     model_requirements: ClassVar[dict[str, PolicyType | None]] = {}
 
     @classmethod
@@ -69,8 +70,8 @@ class BaseAgent(Agent, ABC):
 
     def __init__(
         self,
-        *,
         cfg: BaseAgentCfg,
+        *,
         models: dict[str, Model],
         memory: Memory | None = None,
         observation_space: gymnasium.Space | None = None,
@@ -80,6 +81,7 @@ class BaseAgent(Agent, ABC):
     ) -> None:
         """Initialize common tracking state."""
         self._validate_models(models)
+        ConfiguredBase.__init__(self, cfg)
         super().__init__(
             cfg=cfg,
             models=models,

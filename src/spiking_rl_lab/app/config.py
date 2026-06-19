@@ -8,76 +8,10 @@ from typing import Any
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
-from spiking_rl_lab.models.base_model import BaseModelCfg
-
-
-class EnvBackend(StrEnum):
-    """Supported environment backends."""
-
-    gymnasium = "gymnasium"
-
-
-@dataclass(slots=True)
-class EnvConfig:
-    """Environment configuration."""
-
-    backend: EnvBackend = MISSING
-    id: str = MISSING
-    render: bool = False
-    n_envs: int = 1
-
-
-@dataclass(slots=True)
-class AgentConfig:
-    """RL algorithm configuration."""
-
-    name: str = MISSING
-    device: str = "cpu"
-    params: dict[str, Any] = field(default_factory=dict)
-
-
-class ModelRole(StrEnum):
-    """Role of a model within an agent's architecture."""
-
-    policy = "policy"
-    value = "value"
-
-
-class PolicyType(StrEnum):
-    """Policy semantics required by an agent."""
-
-    stochastic = "stochastic"
-    deterministic = "deterministic"
-
-
-@dataclass(slots=True)
-class NetworkNodeCfg:
-    """Configuration for a single network node in ``net_arch``."""
-
-    type: str = MISSING
-    params: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class ModelConfig:
-    """Configuration for a single model instance."""
-
-    role: ModelRole = MISSING
-    device: str = "cpu"
-    policy_type: PolicyType = PolicyType.stochastic
-    """
-    Policy semantics for policy models.
-    Ignored for non-policy model roles.
-    """
-
-    model: BaseModelCfg = field(default_factory=BaseModelCfg)
-
-
-@dataclass(slots=True)
-class ModelsConfig:
-    """Collection of model configurations for an experiment."""
-
-    models: list[ModelConfig] = field(default_factory=list)
+from spiking_rl_lab.agents.builder import AgentConfig
+from spiking_rl_lab.envs.builder import EnvConfig
+from spiking_rl_lab.models.builder import ModelConfig
+from spiking_rl_lab.network.builder import NetworkConfig
 
 
 class RunnerMode(StrEnum):
@@ -138,7 +72,8 @@ class BaseConfig:
 
     env: EnvConfig = field(default_factory=EnvConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
-    models: ModelsConfig = field(default_factory=ModelsConfig)
+    networks: dict[str, NetworkConfig] = field(default_factory=dict)
+    models: list[ModelConfig] = field(default_factory=list)
     runner: RunnerConfig = field(default_factory=RunnerConfig)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
     optuna: OptunaConfig = field(default_factory=OptunaConfig)

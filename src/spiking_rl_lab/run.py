@@ -5,8 +5,8 @@ import logging
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from spiking_rl_lab.utils.config import BaseConfig, register_configs
-from spiking_rl_lab.utils.runner import Runner
+from spiking_rl_lab.app.config import BaseConfig, register_configs
+from spiking_rl_lab.app.runner import Runner
 
 register_configs()
 

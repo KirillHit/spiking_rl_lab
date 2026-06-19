@@ -1,6 +1,12 @@
 """Network package public API and built-in node registration."""
 
-from spiking_rl_lab.network.network import Network, NetworkCfg, build_network
+from spiking_rl_lab.network.builder import NetworkConfig, build_network, register_network
+from spiking_rl_lab.network.network import (
+    BaseNetwork,
+    Network,
+    NetworkCfg,
+    SequentialNetworkCfg,
+)
 from spiking_rl_lab.network.nodes.activations import (
     LIFNode,
     LIFNodeCfg,
@@ -30,6 +36,7 @@ from spiking_rl_lab.network.shape import (
 )
 
 __all__ = [
+    "BaseNetwork",
     "BaseNode",
     "BaseNodeCfg",
     "BatchNormNode",
@@ -47,13 +54,16 @@ __all__ = [
     "ListState",
     "Network",
     "NetworkCfg",
+    "NetworkConfig",
     "ReLUNode",
     "ReLUNodeCfg",
     "SequenceTensorShape",
+    "SequentialNetworkCfg",
     "SiLUNode",
     "SiLUNodeCfg",
     "TensorShape",
     "TensorShapeKind",
     "build_network",
+    "register_network",
     "register_node",
 ]

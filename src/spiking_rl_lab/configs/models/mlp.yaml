@@ -1,8 +1,11 @@
-models:
-  - role: policy
-    policy_type: stochastic
-    device: cpu
-    model: {}
-  - role: value
-    device: cpu
-    model: {}
+- role: policy
+  name: auto
+  policy_type: stochastic
+  device: cpu
+  network: policy_mlp
+  params: {}
+- role: value
+  name: auto
+  device: cpu
+  network: value_mlp
+  params: {}

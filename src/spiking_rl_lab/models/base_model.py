@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import torch
 from skrl.models.torch import CategoricalMixin, DeterministicMixin, GaussianMixin, Model
 from torch import nn
 
+from spiking_rl_lab.core.factory import ConfiguredBase
+
 if TYPE_CHECKING:
     import gymnasium
     import gymnasium as gym
+
+    from spiking_rl_lab.network.shape import TensorShape
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
@@ -50,16 +54,20 @@ def _get_observations(inputs: dict[str, torch.Tensor]) -> torch.Tensor:
     return observations.view(observations.shape[0], -1)
 
 
-class BaseModel(Model):
+class BaseModel(Model, ConfiguredBase):
     """Common base class for spiking RL models."""
+
+    Config: ClassVar[type[BaseModelCfg]] = BaseModelCfg
 
     def __init__(
         self,
         cfg: BaseModelCfg,
+        *,
         observation_space: gym.Space | None = None,
         state_space: gym.Space | None = None,
         action_space: gym.Space | None = None,
         device: str | torch.device | None = None,
+        network: nn.Module | None = None,
     ) -> None:
         """Initialize model base state.
 
@@ -69,6 +77,7 @@ class BaseModel(Model):
             state_space: State space.
             action_space: Action space.
             device: Device for tensors and modules.
+            network: Network module used by ``compute``.
 
         """
         super().__init__(
@@ -77,8 +86,8 @@ class BaseModel(Model):
             action_space=action_space,
             device=device,
         )
-        self._cfg = cfg
-        self._net = None  # use generator
+        ConfiguredBase.__init__(self, cfg)
+        self._net = network
 
     def act(self, inputs: dict[str, Any], *, role: str = "") -> tuple[torch.Tensor, dict[str, Any]]:
         """Run default action path.
@@ -96,6 +105,24 @@ class BaseModel(Model):
         """
         return self.compute(inputs, role=role)
 
+    def _forward_network(self, observations: torch.Tensor) -> torch.Tensor:
+        """Run the configured network and return only its tensor output."""
+        if self._net is None:
+            msg = f"{self.__class__.__name__} requires a configured network"
+            raise RuntimeError(msg)
+        outputs = self._net(observations)
+        if isinstance(outputs, tuple):
+            return outputs[0]
+        return outputs
+
+    @property
+    def network_output_shape(self) -> TensorShape:
+        """Return the configured network output shape."""
+        if self._net is None:
+            msg = f"{self.__class__.__name__} requires a configured network"
+            raise RuntimeError(msg)
+        return self._net.output_shape
+
 
 class CategoricalPolicyModel(CategoricalMixin, BaseModel):
     """Categorical policy model for discrete action spaces."""
@@ -107,6 +134,7 @@ class CategoricalPolicyModel(CategoricalMixin, BaseModel):
         state_space: gymnasium.Space | None = None,
         action_space: gymnasium.Space | None = None,
         device: str | torch.device | None = None,
+        network: nn.Module | None = None,
     ) -> None:
         """Initialize categorical policy model.
 
@@ -116,6 +144,7 @@ class CategoricalPolicyModel(CategoricalMixin, BaseModel):
             state_space: State space.
             action_space: Action space.
             device: Device for tensors and modules.
+            network: Network module used for forward passes.
 
         """
         BaseModel.__init__(
@@ -125,6 +154,7 @@ class CategoricalPolicyModel(CategoricalMixin, BaseModel):
             state_space=state_space,
             action_space=action_space,
             device=device,
+            network=network,
         )
         CategoricalMixin.__init__(
             self,
@@ -146,7 +176,7 @@ class CategoricalPolicyModel(CategoricalMixin, BaseModel):
             Policy logits and extra outputs.
 
         """
-        return self._net(_get_observations(inputs)), {}
+        return self._forward_network(_get_observations(inputs)), {}
 
 
 class GaussianPolicyModel(GaussianMixin, BaseModel):
@@ -159,6 +189,7 @@ class GaussianPolicyModel(GaussianMixin, BaseModel):
         state_space: gymnasium.Space | None = None,
         action_space: gymnasium.Space | None = None,
         device: str | torch.device | None = None,
+        network: nn.Module | None = None,
     ) -> None:
         """Initialize Gaussian policy model.
 
@@ -168,6 +199,7 @@ class GaussianPolicyModel(GaussianMixin, BaseModel):
             state_space: State space.
             action_space: Action space.
             device: Device for tensors and modules.
+            network: Network module used for forward passes.
 
         """
         BaseModel.__init__(
@@ -177,6 +209,7 @@ class GaussianPolicyModel(GaussianMixin, BaseModel):
             state_space=state_space,
             action_space=action_space,
             device=device,
+            network=network,
         )
         self._log_std_parameter = nn.Parameter(
             torch.full((self.num_actions,), self._cfg.log_std_init, device=self.device),
@@ -206,7 +239,7 @@ class GaussianPolicyModel(GaussianMixin, BaseModel):
             Mean actions and extra outputs with ``log_std``.
 
         """
-        mean_actions = self._net(_get_observations(inputs))
+        mean_actions = self._forward_network(_get_observations(inputs))
         log_std = self._log_std_parameter.expand_as(mean_actions)
         return mean_actions, {"log_std": log_std}
 
@@ -221,6 +254,7 @@ class DeterministicPolicyModel(DeterministicMixin, BaseModel):
         state_space: gymnasium.Space | None = None,
         action_space: gymnasium.Space | None = None,
         device: str | torch.device | None = None,
+        network: nn.Module | None = None,
     ) -> None:
         """Initialize deterministic policy model.
 
@@ -230,6 +264,7 @@ class DeterministicPolicyModel(DeterministicMixin, BaseModel):
             state_space: State space.
             action_space: Action space.
             device: Device for tensors and modules.
+            network: Network module used for forward passes.
 
         """
         BaseModel.__init__(
@@ -239,6 +274,7 @@ class DeterministicPolicyModel(DeterministicMixin, BaseModel):
             state_space=state_space,
             action_space=action_space,
             device=device,
+            network=network,
         )
         DeterministicMixin.__init__(
             self,
@@ -260,7 +296,7 @@ class DeterministicPolicyModel(DeterministicMixin, BaseModel):
             Actions and extra outputs.
 
         """
-        return self._net(_get_observations(inputs)), {}
+        return self._forward_network(_get_observations(inputs)), {}
 
 
 class ValueModel(BaseModel):
@@ -273,6 +309,7 @@ class ValueModel(BaseModel):
         state_space: gymnasium.Space | None = None,
         action_space: gymnasium.Space | None = None,
         device: str | torch.device | None = None,
+        network: nn.Module | None = None,
     ) -> None:
         """Initialize model.
 
@@ -282,6 +319,7 @@ class ValueModel(BaseModel):
             action_space: Action space.
             device: Device for tensors and modules.
             cfg: Model configuration.
+            network: Network module used for forward passes.
 
         """
         super().__init__(
@@ -290,6 +328,7 @@ class ValueModel(BaseModel):
             action_space=action_space,
             device=device,
             cfg=cfg,
+            network=network,
         )
 
     def compute(
@@ -308,4 +347,4 @@ class ValueModel(BaseModel):
             Value tensor and extra outputs.
 
         """
-        return self._net(_get_observations(inputs)), {}
+        return self._forward_network(_get_observations(inputs)), {}
