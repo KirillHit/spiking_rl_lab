@@ -69,7 +69,7 @@ def build_configured_instance[TBase](
 
     try:
         component_cfg = component_class.Config(**cfg.params)
-    except TypeError as exc:
+    except (TypeError, ValueError) as exc:
         msg = (
             f"Invalid config for {spec.kind} '{cfg.name}' "
             f"({component_class.Config.__name__}): {exc}"
