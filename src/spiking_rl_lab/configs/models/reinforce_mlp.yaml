@@ -1,6 +1,5 @@
 - role: policy
-  name: auto
-  policy_type: stochastic
+  name: categorical_policy
   device: cuda
-  network: policy_mlp
-  params: {}
+  params:
+    network: policy_mlp

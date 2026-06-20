@@ -24,8 +24,8 @@ from spiking_rl_lab.app.tracking import (
     setup_mlflow,
 )
 from spiking_rl_lab.core.exception import SpikingRLLabError, TrainerCreationError
-from spiking_rl_lab.envs import build_env
-from spiking_rl_lab.models import build_models
+from spiking_rl_lab.envs.builder import build_env
+from spiking_rl_lab.models.builder import build_models
 
 if TYPE_CHECKING:
     from pathlib import Path

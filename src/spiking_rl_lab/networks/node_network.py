@@ -1,58 +1,44 @@
-"""Network implementations."""
+"""Node-based network implementation."""
 
 from __future__ import annotations
 
 import dataclasses
-from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, ClassVar
 
 import torch
 from torch import nn
 
-from spiking_rl_lab.core.factory import (
-    ConfiguredBase,
-)
-from spiking_rl_lab.network.nodes.register import build_node
+from spiking_rl_lab.networks.base_network import BaseNetwork
+from spiking_rl_lab.networks.builder import register_network
+from spiking_rl_lab.networks.nodes.register import NetworkNodeCfg, build_node
 
 if TYPE_CHECKING:
-    from spiking_rl_lab.network.nodes import ListState
-    from spiking_rl_lab.network.nodes.register import NetworkNodeCfg
-    from spiking_rl_lab.network.shape import TensorShape
+    from spiking_rl_lab.networks.nodes import ListState
+    from spiking_rl_lab.networks.shape import TensorShape
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
-class SequentialNetworkCfg:
-    """Sequential network configuration."""
+class NodeNetworkCfg:
+    """Node-based network configuration."""
 
     init_weights: bool = True
     nodes: list[NetworkNodeCfg] = dataclasses.field(default_factory=list)
 
-
-NetworkCfg = SequentialNetworkCfg
-
-
-class BaseNetwork(nn.Module, ConfiguredBase, ABC):
-    """Base class for configured networks."""
-
-    Config: ClassVar[type[object]]
-
-    def __init__(self, cfg: object) -> None:
-        """Validate and store network configuration."""
-        nn.Module.__init__(self)
-        ConfiguredBase.__init__(self, cfg)
-
-    @property
-    @abstractmethod
-    def output_shape(self) -> TensorShape:
-        """Return network output shape."""
+    def __post_init__(self) -> None:
+        """Convert YAML node mappings to typed node configs."""
+        self.nodes = [
+            node if isinstance(node, NetworkNodeCfg) else NetworkNodeCfg(**node)
+            for node in self.nodes
+        ]
 
 
-class Network(BaseNetwork):
-    """Sequential network built from registered node classes."""
+@register_network("node_graph")
+class NodeNetwork(BaseNetwork):
+    """Network built from configured nodes."""
 
-    Config: ClassVar[type[SequentialNetworkCfg]] = SequentialNetworkCfg
+    Config: ClassVar[type[NodeNetworkCfg]] = NodeNetworkCfg
 
-    def __init__(self, cfg: SequentialNetworkCfg, input_shape: TensorShape) -> None:
+    def __init__(self, cfg: NodeNetworkCfg, input_shape: TensorShape) -> None:
         """Build network nodes from ``cfg.nodes``."""
         super().__init__(cfg)
         self._net = nn.ModuleList()

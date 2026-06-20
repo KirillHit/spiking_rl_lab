@@ -55,16 +55,8 @@ def _register_env_modules() -> None:
 
 
 def build_env(cfg: EnvConfig) -> Wrapper:
-    """Build a skrl-wrapped environment according to the configured backend.
-
-    Raises:
-        EnvironmentCreationError: If the backend is unsupported.
-
-    """
-    log.info(
-        "Creating environment using backend '%s'...",
-        cfg.name,
-    )
+    """Build a skrl-wrapped environment according to the configured backend."""
+    log.info("Creating environment using backend '%s'...", cfg.name)
     _register_env_modules()
 
     backend = build_configured_instance(

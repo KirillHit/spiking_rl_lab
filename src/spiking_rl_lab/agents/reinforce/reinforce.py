@@ -19,7 +19,7 @@ from spiking_rl_lab.core.validation import (
     require_positive,
     require_range,
 )
-from spiking_rl_lab.models.builder import PolicyType
+from spiking_rl_lab.models.base_model import StochasticPolicyModel
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -114,9 +114,7 @@ class Reinforce(BaseAgent):
     """REINFORCE agent implementation."""
 
     Config: ClassVar[type[ReinforceCfg]] = ReinforceCfg
-    model_requirements: ClassVar[dict[str, PolicyType | None]] = {
-        "policy": PolicyType.stochastic,
-    }
+    model_contracts: ClassVar[dict[str, type[Model]]] = {"policy": StochasticPolicyModel}
 
     def build_memory(self, *, env: Wrapper) -> Memory | None:
         """Build rollout memory sized for at least one REINFORCE update window."""

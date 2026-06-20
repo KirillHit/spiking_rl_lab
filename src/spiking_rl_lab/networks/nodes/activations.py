@@ -10,11 +10,11 @@ import torch
 from norse.torch.functional.leaky_integrator import LIParameters
 from norse.torch.functional.lif import LIFParameters
 
-from spiking_rl_lab.network.nodes.base_node import BaseNode, BaseNodeCfg, ListState
-from spiking_rl_lab.network.nodes.register import register_node
+from spiking_rl_lab.networks.nodes.base_node import BaseNode, BaseNodeCfg, ListState
+from spiking_rl_lab.networks.nodes.register import register_node
 
 if TYPE_CHECKING:
-    from spiking_rl_lab.network.shape import TensorShape
+    from spiking_rl_lab.networks.shape import TensorShape
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)

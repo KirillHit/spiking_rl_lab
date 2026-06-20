@@ -1,5 +1,5 @@
 policy_mlp:
-  name: sequential
+  name: node_graph
   params:
     nodes:
       - name: linear
@@ -11,7 +11,7 @@ policy_mlp:
         params:
           out_features: 2
 value_mlp:
-  name: sequential
+  name: node_graph
   params:
     nodes:
       - name: linear

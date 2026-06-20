@@ -9,9 +9,9 @@ import torch
 from torch import nn
 
 from spiking_rl_lab.core.exception import NetworkCreationError
-from spiking_rl_lab.network.nodes.base_node import BaseNode, BaseNodeCfg, ListState
-from spiking_rl_lab.network.nodes.register import register_node
-from spiking_rl_lab.network.shape import (
+from spiking_rl_lab.networks.nodes.base_node import BaseNode, BaseNodeCfg, ListState
+from spiking_rl_lab.networks.nodes.register import register_node
+from spiking_rl_lab.networks.shape import (
     DenseTensorShape,
     ImageTensorShape,
     SequenceTensorShape,

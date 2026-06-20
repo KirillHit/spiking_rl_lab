@@ -1,11 +1,10 @@
 - role: policy
-  name: auto
-  policy_type: stochastic
+  name: categorical_policy
   device: cpu
-  network: policy_mlp
-  params: {}
+  params:
+    network: policy_mlp
 - role: value
-  name: auto
+  name: value
   device: cpu
-  network: value_mlp
-  params: {}
+  params:
+    network: value_mlp

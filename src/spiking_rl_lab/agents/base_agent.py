@@ -13,12 +13,6 @@ from skrl.agents.torch import Agent, AgentCfg
 
 from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.factory import ConfiguredBase
-from spiking_rl_lab.models.base_model import (
-    CategoricalPolicyModel,
-    DeterministicPolicyModel,
-    GaussianPolicyModel,
-)
-from spiking_rl_lab.models.builder import PolicyType
 
 if TYPE_CHECKING:
     import gymnasium
@@ -37,33 +31,19 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
     """Common utilities for agents used in this project."""
 
     Config: ClassVar[type[BaseAgentCfg]] = BaseAgentCfg
-    model_requirements: ClassVar[dict[str, PolicyType | None]] = {}
+    model_contracts: ClassVar[dict[str, type[Model]]] = {}
 
     @classmethod
     def _validate_models(cls, models: dict[str, Model]) -> None:
         """Validate that supplied models satisfy this agent's requirements."""
-        for role, policy_type in cls.model_requirements.items():
+        for role, model_cls in cls.model_contracts.items():
             model = models.get(role)
             if model is None:
                 msg = f"Agent '{cls.__name__}' requires model role '{role}'"
                 raise AgentCreationError(msg)
-
-            if policy_type is PolicyType.stochastic and not isinstance(
-                model,
-                (CategoricalPolicyModel, GaussianPolicyModel),
-            ):
+            if not isinstance(model, model_cls):
                 msg = (
-                    f"Agent '{cls.__name__}' requires a stochastic policy model for role "
-                    f"'{role}', got {type(model).__name__}"
-                )
-                raise AgentCreationError(msg)
-
-            if policy_type is PolicyType.deterministic and not isinstance(
-                model,
-                DeterministicPolicyModel,
-            ):
-                msg = (
-                    f"Agent '{cls.__name__}' requires a deterministic policy model for role "
+                    f"Agent '{cls.__name__}' requires {model_cls.__name__} for role "
                     f"'{role}', got {type(model).__name__}"
                 )
                 raise AgentCreationError(msg)

@@ -11,7 +11,7 @@ from omegaconf import MISSING
 from spiking_rl_lab.agents.builder import AgentConfig
 from spiking_rl_lab.envs.builder import EnvConfig
 from spiking_rl_lab.models.builder import ModelConfig
-from spiking_rl_lab.network.builder import NetworkConfig
+from spiking_rl_lab.networks.builder import NetworkConfig
 
 
 class RunnerMode(StrEnum):

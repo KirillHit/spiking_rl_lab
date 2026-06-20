@@ -13,7 +13,7 @@ from torch import nn
 from spiking_rl_lab.core.factory import ConfiguredBase
 
 if TYPE_CHECKING:
-    from spiking_rl_lab.network.shape import TensorShape
+    from spiking_rl_lab.networks.shape import TensorShape
 
 type ListState = list[Any | None | ListState]
 
