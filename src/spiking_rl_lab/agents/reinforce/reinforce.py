@@ -29,6 +29,8 @@ if TYPE_CHECKING:
     from skrl.memories.torch import Memory
     from skrl.models.torch import Model
 
+    from spiking_rl_lab.networks.nodes.base_node import ListState
+
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class ReinforceCfg(BaseAgentCfg):
@@ -107,6 +109,22 @@ class ReinforceCfg(BaseAgentCfg):
             "rewards_shaper",
             self.rewards_shaper,
         )
+
+
+def _detach_hidden_states[StateT](hidden_states: StateT) -> StateT:
+    """Detach tensors in a nested hidden-state structure."""
+    if isinstance(hidden_states, torch.Tensor):
+        return hidden_states.detach()
+    if isinstance(hidden_states, list):
+        return [_detach_hidden_states(item) for item in hidden_states]
+    if isinstance(hidden_states, tuple):
+        values = tuple(_detach_hidden_states(item) for item in hidden_states)
+        if hasattr(hidden_states, "_fields"):
+            return type(hidden_states)(*values)
+        return values
+    if isinstance(hidden_states, dict):
+        return {key: _detach_hidden_states(value) for key, value in hidden_states.items()}
+    return hidden_states
 
 
 @register_agent("reinforce")
@@ -195,6 +213,7 @@ class Reinforce(BaseAgent):
             self._state_preprocessor = self._empty_preprocessor
 
         self._current_log_prob: torch.Tensor | None = None
+        self._hidden_states: ListState | None = None
         self._rollout = 0
 
     def init(self, *, trainer_cfg: dict[str, Any] | None = None) -> None:
@@ -216,6 +235,7 @@ class Reinforce(BaseAgent):
 
         self._tensors_names = ["observations", "states", "actions", "returns", "log_prob"]
         self.memory.reset()
+        self._hidden_states = None
 
     def act(
         self,
@@ -230,6 +250,8 @@ class Reinforce(BaseAgent):
             "observations": self._observation_preprocessor(observations),
             "states": self._state_preprocessor(states),
         }
+        if self._hidden_states is not None:
+            inputs["hidden_states"] = self._hidden_states
 
         if timestep < self.cfg.random_timesteps:
             self._current_log_prob = None
@@ -239,6 +261,8 @@ class Reinforce(BaseAgent):
             actions, outputs = self.policy.act(inputs, role="policy")
 
         self._current_log_prob = outputs["log_prob"]
+        if "hidden_states" in outputs:
+            self._hidden_states = _detach_hidden_states(outputs["hidden_states"])
 
         return actions, outputs
 

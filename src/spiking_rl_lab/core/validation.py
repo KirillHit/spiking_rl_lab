@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from hydra.utils import get_class, get_object
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
 
 def require_minimum(name: str, value: float, *, minimum: float) -> None:
@@ -75,3 +75,26 @@ def require_optional_callable(
 
     msg = f"{name} must be callable, dotted callable path, or None"
     raise TypeError(msg)
+
+
+def require_shape_fields[ShapeT](
+    name: str,
+    shape: object,
+    *,
+    shape_type: type[ShapeT],
+    kind: str,
+    fields: Mapping[str, object] | None = None,
+) -> ShapeT:
+    """Require a shape object of the expected kind and field values."""
+    if not isinstance(shape, shape_type):
+        actual_kind = getattr(shape, "kind", type(shape).__name__)
+        msg = f"{name} must be {kind}, got {actual_kind}"
+        raise TypeError(msg)
+
+    for field_name, expected_value in (fields or {}).items():
+        actual_value = getattr(shape, field_name)
+        if actual_value != expected_value:
+            msg = f"{name}.{field_name} must be {expected_value}, got {actual_value}"
+            raise ValueError(msg)
+
+    return shape
