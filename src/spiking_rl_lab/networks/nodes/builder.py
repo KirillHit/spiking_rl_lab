@@ -22,8 +22,11 @@ if TYPE_CHECKING:
 
 
 NODE_MODULES = (
-    "spiking_rl_lab.networks.nodes.common_nodes",
-    "spiking_rl_lab.networks.nodes.activations",
+    "spiking_rl_lab.networks.nodes.standard.linear",
+    "spiking_rl_lab.networks.nodes.standard.convolutions",
+    "spiking_rl_lab.networks.nodes.standard.normalizations",
+    "spiking_rl_lab.networks.nodes.standard.activations",
+    "spiking_rl_lab.networks.nodes.spiking.activations",
 )
 NODE_REGISTRY: dict[str, type[BaseNode]] = {}
 NODE_SPEC = RegistrySpec[BaseNode](
