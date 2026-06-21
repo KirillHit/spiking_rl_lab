@@ -12,7 +12,7 @@ defaults:
 
 hydra:
   run:
-    dir: runs/${runner.experiment_name}/${env.id}/${now:%Y-%m-%d_%H-%M-%S}_${agent.name}
+    dir: runs/${runner.experiment_name}/${env.params.id}/${now:%Y-%m-%d_%H-%M-%S}_${agent.name}
   sweep:
-    dir: runs/${runner.experiment_name}/${env.id}/${now:%Y-%m-%d_%H-%M-%S}_${agent.name}
+    dir: runs/${runner.experiment_name}/${env.params.id}/${now:%Y-%m-%d_%H-%M-%S}_${agent.name}
     subdir: ${hydra.job.num}

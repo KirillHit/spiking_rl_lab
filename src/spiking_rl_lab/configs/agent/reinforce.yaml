@@ -1,11 +1,9 @@
 name: reinforce
-device: cpu
+device: cuda
 params:
-  rollouts: 16
-  learning_rate: 3e-4
-  learning_rate_scheduler: torch.optim.lr_scheduler.CosineAnnealingLR
-  learning_rate_scheduler_kwargs:
-    T_max: 1875
+  rollouts: 64
+  learning_rate: 1e-3
+  learning_rate_scheduler: null
   observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
   experiment:
     write_interval: 2000

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 log = logging.getLogger(__name__)
-_BUILTIN_AGENT_MODULES = ("spiking_rl_lab.agents.reinforce.reinforce",)
+_BUILTIN_AGENT_MODULES = ("spiking_rl_lab.agents.reinforce",)
 _REGISTERED_BUILTIN_MODULES: set[str] = set()
 
 TAgent = TypeVar("TAgent", bound="BaseAgent")
@@ -70,15 +70,11 @@ def build_agent(cfg: AgentConfig, env: Wrapper, models: dict[str, Model]) -> Bas
             cfg,
             spec=AGENT_SPEC,
             dependencies={
+                "env": env,
                 "models": models,
-                "memory": None,
-                "observation_space": env.observation_space,
-                "state_space": env.state_space,
-                "action_space": env.action_space,
                 "device": cfg.device,
             },
         )
-        agent.memory = agent.build_memory(env=env)
     except AgentCreationError:
         raise
     except Exception as exc:

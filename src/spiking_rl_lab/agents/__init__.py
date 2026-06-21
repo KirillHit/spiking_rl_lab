@@ -1,1 +1,1 @@
-"""Agent package."""
+"""Agent components."""

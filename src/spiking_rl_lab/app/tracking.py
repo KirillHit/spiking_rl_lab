@@ -4,7 +4,6 @@ import json
 import logging
 import platform
 import subprocess
-import sys
 from dataclasses import asdict
 from enum import Enum
 from pathlib import Path
@@ -90,25 +89,6 @@ def log_artifact_if_exists(path: Path) -> None:
         log.warning("Artifact file does not exist and will not be logged to MLflow: %s", path)
         return
     mlflow.log_artifact(str(path))
-
-
-def log_environment_packages(folder: Path) -> None:
-    """Log installed Python packages for the current environment as an artifact."""
-    folder.mkdir(parents=True, exist_ok=True)
-    packages_path = folder / "pip_freeze.txt"
-
-    try:
-        packages = subprocess.check_output(
-            [sys.executable, "-m", "pip", "freeze"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        log.warning("Failed to collect installed packages with pip freeze")
-        return
-
-    packages_path.write_text(packages)
-    mlflow.log_artifact(str(packages_path))
 
 
 def log_hardware_info(folder: Path) -> None:

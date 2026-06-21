@@ -6,7 +6,14 @@ policy_mlp:
         params:
           out_features: 64
       - name: lif
-        params: {}
+      - name: linear
+        params:
+          out_features: 128
+      - name: lif
+      - name: linear
+        params:
+          out_features: 64
+      - name: li
       - name: linear
         params:
           out_features: 2

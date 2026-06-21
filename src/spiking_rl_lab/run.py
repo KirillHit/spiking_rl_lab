@@ -20,6 +20,7 @@ def run(cfg: BaseConfig) -> None:
         runner.run(cfg)
     except Exception:
         log.exception("Run failed!")
+        raise
 
 
 @hydra.main(version_base="1.3", config_path="configs", config_name="config")
@@ -27,8 +28,8 @@ def main(cfg: DictConfig) -> None:
     """Hydra entry: receives the composed config and logs it for traceability."""
     cfg_obj = OmegaConf.to_object(cfg)
     if not isinstance(cfg_obj, BaseConfig):
-        log.error("Invalid config type: expected BaseConfig, got %s", type(cfg_obj).__name__)
-        return
+        msg = f"Invalid config type: expected BaseConfig, got {type(cfg_obj).__name__}"
+        raise TypeError(msg)
 
     run(cfg_obj)
 

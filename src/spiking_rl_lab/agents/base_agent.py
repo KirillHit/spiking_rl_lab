@@ -15,7 +15,6 @@ from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.factory import ConfiguredBase
 
 if TYPE_CHECKING:
-    import gymnasium
     import torch
     from skrl.envs.wrappers.torch import Wrapper
     from skrl.memories.torch import Memory
@@ -50,25 +49,24 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
         self,
         cfg: Config,
         *,
+        env: Wrapper,
         models: dict[str, Model],
-        memory: Memory | None = None,
-        observation_space: gymnasium.Space | None = None,
-        state_space: gymnasium.Space | None = None,
-        action_space: gymnasium.Space | None = None,
         device: str | torch.device | None = None,
     ) -> None:
         """Initialize common tracking state."""
         self._validate_models(models)
         ConfiguredBase.__init__(self, cfg)
-        super().__init__(
+        Agent.__init__(
+            self,
             cfg=cfg,
             models=models,
-            memory=memory,
-            observation_space=observation_space,
-            state_space=state_space,
-            action_space=action_space,
+            memory=None,
+            observation_space=env.observation_space,
+            state_space=env.state_space,
+            action_space=env.action_space,
             device=device,
         )
+        self.memory = self.build_memory(env=env)
         self.last_tracking_metrics: dict[str, float] = {}
 
     @abstractmethod
