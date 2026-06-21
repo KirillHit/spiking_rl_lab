@@ -28,7 +28,7 @@ class TorchActivationNode(BaseNode):
     }
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(BaseNode.Config):
         """Torch activation node configuration."""
 
         activation: Literal["relu", "silu", "sigmoid", "tanh"]

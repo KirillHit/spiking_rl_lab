@@ -62,7 +62,7 @@ class CategoricalPolicyModel(CategoricalMixin, StochasticPolicyModel):
     """Categorical policy model for discrete action spaces."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(StochasticPolicyModel.Config):
         """Categorical policy model configuration."""
 
         network: str
@@ -121,7 +121,7 @@ class GaussianPolicyModel(GaussianMixin, StochasticPolicyModel):
     """Gaussian policy model for continuous stochastic action spaces."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(StochasticPolicyModel.Config):
         """Gaussian policy model configuration."""
 
         network: str
@@ -197,7 +197,7 @@ class SkrlDeterministicPolicyModel(DeterministicMixin, DeterministicPolicyModel)
     """Deterministic policy model for continuous action spaces."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(DeterministicPolicyModel.Config):
         """Deterministic policy model configuration."""
 
         network: str
@@ -256,7 +256,7 @@ class SkrlValueModel(ValueModel):
     """Dense value model with spiking hidden activations."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(ValueModel.Config):
         """Value model configuration."""
 
         network: str

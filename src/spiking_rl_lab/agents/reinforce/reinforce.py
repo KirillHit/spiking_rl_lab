@@ -10,7 +10,7 @@ import torch
 from skrl import config
 from skrl.memories.torch import RandomMemory
 
-from spiking_rl_lab.agents.base_agent import BaseAgent, BaseAgentCfg
+from spiking_rl_lab.agents.base_agent import BaseAgent
 from spiking_rl_lab.agents.builder import register_agent
 from spiking_rl_lab.core.validation import (
     require_minimum,
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
-class ReinforceCfg(BaseAgentCfg):
+class ReinforceCfg(BaseAgent.Config):
     """Configuration for the REINFORCE agent."""
 
     rollouts: int = 16

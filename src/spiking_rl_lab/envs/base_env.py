@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -13,6 +14,10 @@ if TYPE_CHECKING:
 
 class BaseEnvBackend(ConfiguredBase, ABC):
     """Base class for environment backend adapters."""
+
+    @dataclasses.dataclass(kw_only=True, slots=True)
+    class Config:
+        """Base environment backend configuration."""
 
     def __init__(self, cfg: object) -> None:
         """Store backend configuration."""

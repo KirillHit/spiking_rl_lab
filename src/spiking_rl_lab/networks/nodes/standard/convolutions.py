@@ -26,7 +26,7 @@ class Conv1dNode(BaseNode):
     """Convolution layer node for channel-first sequence tensors."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(BaseNode.Config):
         """1D convolution layer configuration."""
 
         out_channels: int
@@ -79,7 +79,7 @@ class Conv2dNode(BaseNode):
     """Convolution layer node for channel-first image tensors."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(BaseNode.Config):
         """2D convolution layer configuration."""
 
         out_channels: int

@@ -25,7 +25,7 @@ class LinearNode(BaseNode):
     """
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(BaseNode.Config):
         """Linear layer configuration."""
 
         out_features: int

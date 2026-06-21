@@ -22,15 +22,13 @@ if TYPE_CHECKING:
     from skrl.models.torch import Model
 
 
-@dataclasses.dataclass(kw_only=True, slots=True)
-class BaseAgentCfg(AgentCfg):
-    """Base class for the agent's configuration."""
-
-
 class BaseAgent(Agent, ConfiguredBase, ABC):
     """Common utilities for agents used in this project."""
 
-    Config: ClassVar[type[BaseAgentCfg]] = BaseAgentCfg
+    @dataclasses.dataclass(kw_only=True, slots=True)
+    class Config(AgentCfg):
+        """Base class for the agent's configuration."""
+
     model_contracts: ClassVar[dict[str, type[Model]]] = {}
 
     @classmethod
@@ -50,7 +48,7 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
 
     def __init__(
         self,
-        cfg: BaseAgentCfg,
+        cfg: Config,
         *,
         models: dict[str, Model],
         memory: Memory | None = None,

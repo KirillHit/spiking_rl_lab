@@ -21,7 +21,7 @@ class NodeNetwork(BaseNetwork):
     """Network built from configured nodes."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(BaseNetwork.Config):
         """Node-based network configuration."""
 
         init_weights: bool = True

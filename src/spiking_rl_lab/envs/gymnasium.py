@@ -21,7 +21,7 @@ class GymnasiumBackend(BaseEnvBackend):
     """Gymnasium environment backend."""
 
     @dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(BaseEnvBackend.Config):
         """Gymnasium backend configuration."""
 
         id: str

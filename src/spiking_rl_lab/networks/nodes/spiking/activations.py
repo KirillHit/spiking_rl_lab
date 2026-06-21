@@ -23,7 +23,7 @@ class LIFNode(BaseNode):
     """Leaky integrate-and-fire node."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(BaseNode.Config):
         """LIF node configuration."""
 
         dt: float = 0.001
@@ -72,7 +72,7 @@ class LINode(BaseNode):
     """Leaky integrator node."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(BaseNode.Config):
         """LI node configuration."""
 
         dt: float = 0.001

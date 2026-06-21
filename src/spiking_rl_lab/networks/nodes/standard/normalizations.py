@@ -27,7 +27,7 @@ class BatchNorm1dNode(BaseNode):
     """Batch normalization layer node for dense or sequence tensors."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(BaseNode.Config):
         """1D batch normalization layer configuration."""
 
         eps: float = 1e-5
@@ -69,7 +69,7 @@ class BatchNorm2dNode(BaseNode):
     """Batch normalization layer node for image tensors."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
+    class Config(BaseNode.Config):
         """2D batch normalization layer configuration."""
 
         eps: float = 1e-5

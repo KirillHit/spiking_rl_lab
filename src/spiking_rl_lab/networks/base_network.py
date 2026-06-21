@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +20,10 @@ type ListState = list[Any | None | ListState]
 
 class BaseNetwork(nn.Module, ConfiguredBase, ABC):
     """Base class for configured networks."""
+
+    @dataclasses.dataclass(kw_only=True, slots=True)
+    class Config:
+        """Base network configuration."""
 
     def __init__(self, cfg: object) -> None:
         """Validate and store network configuration."""
