@@ -6,6 +6,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Any, Literal
 
 import torch
+from gymnasium.spaces.utils import flatdim
 from skrl.models.torch import CategoricalMixin, DeterministicMixin, GaussianMixin
 from torch import nn
 
@@ -17,14 +18,13 @@ from spiking_rl_lab.models.base_model import (
     ValueModel,
 )
 from spiking_rl_lab.models.builder import register_model
-from spiking_rl_lab.networks.shape import DenseTensorShape
+from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape
 
 if TYPE_CHECKING:
     import gymnasium
 
     from spiking_rl_lab.networks.base_network import BaseNetwork
     from spiking_rl_lab.networks.builder import NetworkBuildContext
-    from spiking_rl_lab.networks.shape import TensorShape
 
 
 def _get_observations(inputs: dict[str, torch.Tensor]) -> torch.Tensor:
@@ -34,6 +34,14 @@ def _get_observations(inputs: dict[str, torch.Tensor]) -> torch.Tensor:
         msg = "Model inputs must contain 'observations'"
         raise KeyError(msg)
     return observations.view(observations.shape[0], -1)
+
+
+def _dense_observation_shape(observation_space: gymnasium.Space | None) -> DenseTensorShape:
+    """Return the dense network input shape for flattened observations."""
+    if observation_space is None:
+        msg = "Model requires observation_space to build an observation network"
+        raise ValueError(msg)
+    return TensorShape.dense(flatdim(observation_space))
 
 
 def _compute_network(
@@ -83,12 +91,14 @@ class CategoricalPolicyModel(CategoricalMixin, StochasticPolicyModel):
             self,
             unnormalized_log_prob=self._cfg.unnormalized_log_prob,
         )
-        network = self.register_network(self._cfg.network)
+        network = self.register_network(
+            self._cfg.network,
+            _dense_observation_shape(observation_space),
+        )
         require_shape_fields(
             f"{self.__class__.__name__} network '{self._cfg.network}' output",
             network.output_shape,
             shape_type=DenseTensorShape,
-            kind="dense output",
             fields={"features": self.num_actions},
         )
 
@@ -151,12 +161,14 @@ class GaussianPolicyModel(GaussianMixin, StochasticPolicyModel):
             max_log_std=self._cfg.max_log_std,
             reduction=self._cfg.reduction,
         )
-        network = self.register_network(self._cfg.network)
+        network = self.register_network(
+            self._cfg.network,
+            _dense_observation_shape(observation_space),
+        )
         require_shape_fields(
             f"{self.__class__.__name__} network '{self._cfg.network}' output",
             network.output_shape,
             shape_type=DenseTensorShape,
-            kind="dense output",
             fields={"features": self.num_actions},
         )
         self._log_std_parameter = nn.Parameter(
@@ -214,12 +226,14 @@ class SkrlDeterministicPolicyModel(DeterministicMixin, DeterministicPolicyModel)
             self,
             clip_actions=self._cfg.clip_actions,
         )
-        network = self.register_network(self._cfg.network)
+        network = self.register_network(
+            self._cfg.network,
+            _dense_observation_shape(observation_space),
+        )
         require_shape_fields(
             f"{self.__class__.__name__} network '{self._cfg.network}' output",
             network.output_shape,
             shape_type=DenseTensorShape,
-            kind="dense output",
             fields={"features": self.num_actions},
         )
 
@@ -265,12 +279,14 @@ class SkrlValueModel(ValueModel):
             device=device,
             network_builder=network_builder,
         )
-        network = self.register_network(self._cfg.network)
+        network = self.register_network(
+            self._cfg.network,
+            _dense_observation_shape(observation_space),
+        )
         require_shape_fields(
             f"{self.__class__.__name__} network '{self._cfg.network}' output",
             network.output_shape,
             shape_type=DenseTensorShape,
-            kind="dense output",
             fields={"features": 1},
         )
 

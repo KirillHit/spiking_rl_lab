@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from skrl.memories.torch import Memory
     from skrl.models.torch import Model
 
-    from spiking_rl_lab.networks.nodes.base_node import ListState
+    from spiking_rl_lab.networks.base_network import ListState
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)

@@ -71,7 +71,7 @@ def build_models(
     observation_space = env.observation_space
     state_space = env.state_space
     action_space = env.action_space
-    network_builder = NetworkBuildContext(networks_cfg, env)
+    network_builder = NetworkBuildContext(networks_cfg)
     _register_model_modules()
 
     for model_cfg in cfg:

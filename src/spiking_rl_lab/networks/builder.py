@@ -7,8 +7,6 @@ from dataclasses import dataclass
 from importlib import import_module
 from typing import TYPE_CHECKING
 
-import gymnasium as gym
-
 from spiking_rl_lab.core.exception import NetworkCreationError
 from spiking_rl_lab.core.factory import (
     FactoryConfig,
@@ -17,12 +15,11 @@ from spiking_rl_lab.core.factory import (
     register_in_registry,
 )
 from spiking_rl_lab.networks.base_network import BaseNetwork
-from spiking_rl_lab.networks.shape import TensorShape
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from skrl.envs.wrappers.torch import Wrapper
+    from spiking_rl_lab.networks.shape import TensorShape
 
 log = logging.getLogger(__name__)
 
@@ -40,8 +37,6 @@ NETWORK_SPEC = RegistrySpec[BaseNetwork](
 @dataclass(kw_only=True, slots=True)
 class NetworkConfig(FactoryConfig):
     """Configuration for a registered network."""
-
-    name: str = "node_graph"
 
 
 def register_network(name: str) -> Callable[[type[BaseNetwork]], type[BaseNetwork]]:
@@ -79,17 +74,14 @@ def build_network(cfg: NetworkConfig, input_shape: TensorShape) -> BaseNetwork:
 class NetworkBuildContext:
     """Build and cache named networks for model construction."""
 
-    def __init__(self, cfg: Mapping[str, NetworkConfig], env: Wrapper) -> None:
+    def __init__(self, cfg: Mapping[str, NetworkConfig]) -> None:
         """Initialize network build context."""
         self._cfg = cfg
-        self._observation_shape = TensorShape.dense(gym.spaces.utils.flatdim(env.observation_space))
         self._networks: dict[str, BaseNetwork] = {}
         self._input_shapes: dict[str, TensorShape] = {}
 
-    def require(self, name: str, input_shape: TensorShape | None = None) -> BaseNetwork:
+    def require(self, name: str, input_shape: TensorShape) -> BaseNetwork:
         """Return a named network, building it if needed."""
-        input_shape = input_shape or self._observation_shape
-
         network = self._networks.get(name)
         if network is not None:
             if self._input_shapes[name] != input_shape:

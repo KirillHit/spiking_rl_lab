@@ -61,7 +61,7 @@ class BaseModel(Model, ConfiguredBase):
     def register_network(
         self,
         name: str,
-        input_shape: TensorShape | None = None,
+        input_shape: TensorShape,
     ) -> BaseNetwork:
         """Register a named network as a model submodule."""
         if self._network_builder is None:

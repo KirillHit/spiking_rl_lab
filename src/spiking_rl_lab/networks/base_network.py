@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from torch import nn
 
@@ -12,8 +12,9 @@ from spiking_rl_lab.core.factory import ConfiguredBase
 if TYPE_CHECKING:
     import torch
 
-    from spiking_rl_lab.networks.nodes.base_node import ListState
     from spiking_rl_lab.networks.shape import TensorShape
+
+type ListState = list[Any | None | ListState]
 
 
 class BaseNetwork(nn.Module, ConfiguredBase, ABC):

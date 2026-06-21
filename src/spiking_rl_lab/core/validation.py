@@ -82,13 +82,11 @@ def require_shape_fields[ShapeT](
     shape: object,
     *,
     shape_type: type[ShapeT],
-    kind: str,
     fields: Mapping[str, object] | None = None,
 ) -> ShapeT:
-    """Require a shape object of the expected kind and field values."""
+    """Require a shape object of the expected type and field values."""
     if not isinstance(shape, shape_type):
-        actual_kind = getattr(shape, "kind", type(shape).__name__)
-        msg = f"{name} must be {kind}, got {actual_kind}"
+        msg = f"{name} must be {shape_type.__name__}, got {type(shape).__name__}"
         raise TypeError(msg)
 
     for field_name, expected_value in (fields or {}).items():

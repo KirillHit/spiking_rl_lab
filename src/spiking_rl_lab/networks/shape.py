@@ -4,28 +4,14 @@ from __future__ import annotations
 
 import dataclasses
 from abc import ABC, abstractmethod
-from enum import StrEnum
 
 import numpy as np
 
 from spiking_rl_lab.core.validation import require_positive
 
 
-class TensorShapeKind(StrEnum):
-    """Supported tensor shape kinds."""
-
-    DENSE = "dense"
-    SEQUENCE = "sequence"
-    IMAGE = "image"
-
-
 class TensorShape(ABC):
     """Base interface for tensor shapes without the batch dimension."""
-
-    @property
-    @abstractmethod
-    def kind(self) -> TensorShapeKind:
-        """Return the tensor shape kind."""
 
     @property
     @abstractmethod
@@ -60,11 +46,6 @@ class DenseTensorShape(TensorShape):
     features: int
 
     @property
-    def kind(self) -> TensorShapeKind:
-        """Return the tensor shape kind."""
-        return TensorShapeKind.DENSE
-
-    @property
     def dims(self) -> np.ndarray:
         """Return tensor dimensions without the batch dimension."""
         return np.asarray([self.features], dtype=np.int64)
@@ -85,11 +66,6 @@ class SequenceTensorShape(TensorShape):
 
     channels: int
     length: int
-
-    @property
-    def kind(self) -> TensorShapeKind:
-        """Return the tensor shape kind."""
-        return TensorShapeKind.SEQUENCE
 
     @property
     def dims(self) -> np.ndarray:
@@ -116,11 +92,6 @@ class ImageTensorShape(TensorShape):
     width: int
 
     @property
-    def kind(self) -> TensorShapeKind:
-        """Return the tensor shape kind."""
-        return TensorShapeKind.IMAGE
-
-    @property
     def dims(self) -> np.ndarray:
         """Return tensor dimensions without the batch dimension."""
         return np.asarray([self.channels, self.height, self.width], dtype=np.int64)
@@ -135,3 +106,20 @@ class ImageTensorShape(TensorShape):
         require_positive("ImageTensorShape.channels", self.channels)
         require_positive("ImageTensorShape.height", self.height)
         require_positive("ImageTensorShape.width", self.width)
+
+
+def require_shape[ShapeT: TensorShape](
+    name: str,
+    shape: TensorShape,
+    shape_type: type[ShapeT] | tuple[type[ShapeT], ...],
+) -> ShapeT:
+    """Require a tensor shape of the expected type."""
+    if isinstance(shape, shape_type):
+        return shape
+
+    if isinstance(shape_type, tuple):
+        expected = " or ".join(item.__name__ for item in shape_type)
+    else:
+        expected = shape_type.__name__
+    msg = f"{name} must be {expected}, got {type(shape).__name__}"
+    raise TypeError(msg)
