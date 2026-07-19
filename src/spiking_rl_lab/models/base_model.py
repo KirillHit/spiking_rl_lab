@@ -7,7 +7,6 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING
 
 from skrl.models.torch import Model
-from torch import nn
 
 from spiking_rl_lab.core.factory import ConfiguredBase
 
@@ -15,9 +14,7 @@ if TYPE_CHECKING:
     import gymnasium as gym
     import torch
 
-    from spiking_rl_lab.networks.base_network import BaseNetwork
-    from spiking_rl_lab.networks.builder import NetworkBuildContext
-    from spiking_rl_lab.networks.shape import TensorShape
+    from spiking_rl_lab.networks.types import TensorShape
 
 
 class BaseModel(Model, ConfiguredBase):
@@ -35,7 +32,6 @@ class BaseModel(Model, ConfiguredBase):
         state_space: gym.Space | None = None,
         action_space: gym.Space | None = None,
         device: str | torch.device | None = None,
-        network_builder: NetworkBuildContext | None = None,
     ) -> None:
         """Initialize model base state.
 
@@ -45,7 +41,6 @@ class BaseModel(Model, ConfiguredBase):
             state_space: State space.
             action_space: Action space.
             device: Device for tensors and modules.
-            network_builder: Shared network builder and cache.
 
         """
         super().__init__(
@@ -55,32 +50,6 @@ class BaseModel(Model, ConfiguredBase):
             device=device,
         )
         ConfiguredBase.__init__(self, cfg)
-        self._network_builder = network_builder
-        self._networks = nn.ModuleDict()
-
-    def register_network(
-        self,
-        name: str,
-        input_shape: TensorShape,
-    ) -> BaseNetwork:
-        """Register a named network as a model submodule."""
-        if self._network_builder is None:
-            msg = f"{self.__class__.__name__} requires a network builder"
-            raise RuntimeError(msg)
-        network = self._network_builder.require(name, input_shape)
-        self._networks[name] = network
-        return network
-
-    def get_network(self, name: str) -> BaseNetwork:
-        """Return a named network available to this model."""
-        if name not in self._networks:
-            registered = ", ".join(sorted(self._networks)) or "<empty>"
-            msg = (
-                f"{self.__class__.__name__} requires registered network '{name}'. "
-                f"Registered: {registered}"
-            )
-            raise RuntimeError(msg)
-        return self._networks[name]
 
     @property
     @abstractmethod

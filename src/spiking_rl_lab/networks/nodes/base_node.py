@@ -13,8 +13,7 @@ from torch import nn
 from spiking_rl_lab.core.factory import ConfiguredBase
 
 if TYPE_CHECKING:
-    from spiking_rl_lab.networks.base_network import ListState
-    from spiking_rl_lab.networks.shape import TensorShape
+    from spiking_rl_lab.networks.types import ListState, TensorShape
 
 
 class BaseNode(nn.Module, ConfiguredBase, ABC):

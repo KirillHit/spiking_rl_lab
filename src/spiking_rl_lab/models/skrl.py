@@ -18,13 +18,11 @@ from spiking_rl_lab.models.base_model import (
     ValueModel,
 )
 from spiking_rl_lab.models.builder import register_model
-from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape
+from spiking_rl_lab.networks.node_network import NodeNetwork
+from spiking_rl_lab.networks.types import DenseTensorShape, TensorShape
 
 if TYPE_CHECKING:
     import gymnasium
-
-    from spiking_rl_lab.networks.base_network import BaseNetwork
-    from spiking_rl_lab.networks.builder import NetworkBuildContext
 
 
 def _get_observations(inputs: dict[str, torch.Tensor]) -> torch.Tensor:
@@ -45,7 +43,7 @@ def _dense_observation_shape(observation_space: gymnasium.Space | None) -> Dense
 
 
 def _compute_network(
-    network: BaseNetwork,
+    network: NodeNetwork,
     inputs: dict[str, Any],
 ) -> tuple[torch.Tensor, dict[str, Any]]:
     """Run a network with optional hidden state and return skrl outputs."""
@@ -65,8 +63,13 @@ class CategoricalPolicyModel(CategoricalMixin, StochasticPolicyModel):
     class Config(StochasticPolicyModel.Config):
         """Categorical policy model configuration."""
 
-        network: str
+        network: NodeNetwork.Config
         unnormalized_log_prob: bool = True
+
+        def __post_init__(self) -> None:
+            """Convert the configured network to its typed configuration."""
+            if not isinstance(self.network, NodeNetwork.Config):
+                self.network = NodeNetwork.Config(**self.network)
 
     def __init__(
         self,
@@ -75,7 +78,6 @@ class CategoricalPolicyModel(CategoricalMixin, StochasticPolicyModel):
         state_space: gymnasium.Space | None = None,
         action_space: gymnasium.Space | None = None,
         device: str | torch.device | None = None,
-        network_builder: NetworkBuildContext | None = None,
     ) -> None:
         """Initialize categorical policy model."""
         BaseModel.__init__(
@@ -85,19 +87,18 @@ class CategoricalPolicyModel(CategoricalMixin, StochasticPolicyModel):
             state_space=state_space,
             action_space=action_space,
             device=device,
-            network_builder=network_builder,
         )
         CategoricalMixin.__init__(
             self,
             unnormalized_log_prob=self._cfg.unnormalized_log_prob,
         )
-        network = self.register_network(
+        self.network = NodeNetwork(
             self._cfg.network,
             _dense_observation_shape(observation_space),
         )
         require_shape_fields(
-            f"{self.__class__.__name__} network '{self._cfg.network}' output",
-            network.output_shape,
+            f"{self.__class__.__name__} network output",
+            self.network.output_shape,
             shape_type=DenseTensorShape,
             fields={"features": self.num_actions},
         )
@@ -108,12 +109,12 @@ class CategoricalPolicyModel(CategoricalMixin, StochasticPolicyModel):
         role: str = "",
     ) -> tuple[torch.Tensor, dict[str, Any]]:
         """Compute categorical policy output."""
-        return _compute_network(self.get_network(self._cfg.network), inputs)
+        return _compute_network(self.network, inputs)
 
     @property
     def output_shape(self) -> TensorShape:
         """Return model output shape."""
-        return self.get_network(self._cfg.network).output_shape
+        return self.network.output_shape
 
 
 @register_model("gaussian_policy")
@@ -124,7 +125,7 @@ class GaussianPolicyModel(GaussianMixin, StochasticPolicyModel):
     class Config(StochasticPolicyModel.Config):
         """Gaussian policy model configuration."""
 
-        network: str
+        network: NodeNetwork.Config
         clip_actions: bool = False
         clip_mean_actions: bool = False
         clip_log_std: bool = True
@@ -133,6 +134,11 @@ class GaussianPolicyModel(GaussianMixin, StochasticPolicyModel):
         reduction: Literal["mean", "sum", "prod", "none"] = "sum"
         log_std_init: float = 0.0
 
+        def __post_init__(self) -> None:
+            """Convert the configured network to its typed configuration."""
+            if not isinstance(self.network, NodeNetwork.Config):
+                self.network = NodeNetwork.Config(**self.network)
+
     def __init__(
         self,
         cfg: Config,
@@ -140,7 +146,6 @@ class GaussianPolicyModel(GaussianMixin, StochasticPolicyModel):
         state_space: gymnasium.Space | None = None,
         action_space: gymnasium.Space | None = None,
         device: str | torch.device | None = None,
-        network_builder: NetworkBuildContext | None = None,
     ) -> None:
         """Initialize Gaussian policy model."""
         BaseModel.__init__(
@@ -150,7 +155,6 @@ class GaussianPolicyModel(GaussianMixin, StochasticPolicyModel):
             state_space=state_space,
             action_space=action_space,
             device=device,
-            network_builder=network_builder,
         )
         GaussianMixin.__init__(
             self,
@@ -161,13 +165,13 @@ class GaussianPolicyModel(GaussianMixin, StochasticPolicyModel):
             max_log_std=self._cfg.max_log_std,
             reduction=self._cfg.reduction,
         )
-        network = self.register_network(
+        self.network = NodeNetwork(
             self._cfg.network,
             _dense_observation_shape(observation_space),
         )
         require_shape_fields(
-            f"{self.__class__.__name__} network '{self._cfg.network}' output",
-            network.output_shape,
+            f"{self.__class__.__name__} network output",
+            self.network.output_shape,
             shape_type=DenseTensorShape,
             fields={"features": self.num_actions},
         )
@@ -181,7 +185,7 @@ class GaussianPolicyModel(GaussianMixin, StochasticPolicyModel):
         role: str = "",
     ) -> tuple[torch.Tensor, dict[str, Any]]:
         """Compute Gaussian policy output."""
-        mean_actions, outputs = _compute_network(self.get_network(self._cfg.network), inputs)
+        mean_actions, outputs = _compute_network(self.network, inputs)
         log_std = self._log_std_parameter.expand_as(mean_actions)
         outputs["log_std"] = log_std
         return mean_actions, outputs
@@ -189,7 +193,7 @@ class GaussianPolicyModel(GaussianMixin, StochasticPolicyModel):
     @property
     def output_shape(self) -> TensorShape:
         """Return model output shape."""
-        return self.get_network(self._cfg.network).output_shape
+        return self.network.output_shape
 
 
 @register_model("deterministic_policy")
@@ -200,8 +204,13 @@ class SkrlDeterministicPolicyModel(DeterministicMixin, DeterministicPolicyModel)
     class Config(DeterministicPolicyModel.Config):
         """Deterministic policy model configuration."""
 
-        network: str
+        network: NodeNetwork.Config
         clip_actions: bool = False
+
+        def __post_init__(self) -> None:
+            """Convert the configured network to its typed configuration."""
+            if not isinstance(self.network, NodeNetwork.Config):
+                self.network = NodeNetwork.Config(**self.network)
 
     def __init__(
         self,
@@ -210,7 +219,6 @@ class SkrlDeterministicPolicyModel(DeterministicMixin, DeterministicPolicyModel)
         state_space: gymnasium.Space | None = None,
         action_space: gymnasium.Space | None = None,
         device: str | torch.device | None = None,
-        network_builder: NetworkBuildContext | None = None,
     ) -> None:
         """Initialize deterministic policy model."""
         BaseModel.__init__(
@@ -220,19 +228,18 @@ class SkrlDeterministicPolicyModel(DeterministicMixin, DeterministicPolicyModel)
             state_space=state_space,
             action_space=action_space,
             device=device,
-            network_builder=network_builder,
         )
         DeterministicMixin.__init__(
             self,
             clip_actions=self._cfg.clip_actions,
         )
-        network = self.register_network(
+        self.network = NodeNetwork(
             self._cfg.network,
             _dense_observation_shape(observation_space),
         )
         require_shape_fields(
-            f"{self.__class__.__name__} network '{self._cfg.network}' output",
-            network.output_shape,
+            f"{self.__class__.__name__} network output",
+            self.network.output_shape,
             shape_type=DenseTensorShape,
             fields={"features": self.num_actions},
         )
@@ -243,12 +250,12 @@ class SkrlDeterministicPolicyModel(DeterministicMixin, DeterministicPolicyModel)
         role: str = "",
     ) -> tuple[torch.Tensor, dict[str, Any]]:
         """Compute deterministic policy output."""
-        return _compute_network(self.get_network(self._cfg.network), inputs)
+        return _compute_network(self.network, inputs)
 
     @property
     def output_shape(self) -> TensorShape:
         """Return model output shape."""
-        return self.get_network(self._cfg.network).output_shape
+        return self.network.output_shape
 
 
 @register_model("value")
@@ -259,7 +266,12 @@ class SkrlValueModel(ValueModel):
     class Config(ValueModel.Config):
         """Value model configuration."""
 
-        network: str
+        network: NodeNetwork.Config
+
+        def __post_init__(self) -> None:
+            """Convert the configured network to its typed configuration."""
+            if not isinstance(self.network, NodeNetwork.Config):
+                self.network = NodeNetwork.Config(**self.network)
 
     def __init__(
         self,
@@ -268,7 +280,6 @@ class SkrlValueModel(ValueModel):
         state_space: gymnasium.Space | None = None,
         action_space: gymnasium.Space | None = None,
         device: str | torch.device | None = None,
-        network_builder: NetworkBuildContext | None = None,
     ) -> None:
         """Initialize value model."""
         super().__init__(
@@ -277,15 +288,14 @@ class SkrlValueModel(ValueModel):
             state_space=state_space,
             action_space=action_space,
             device=device,
-            network_builder=network_builder,
         )
-        network = self.register_network(
+        self.network = NodeNetwork(
             self._cfg.network,
             _dense_observation_shape(observation_space),
         )
         require_shape_fields(
-            f"{self.__class__.__name__} network '{self._cfg.network}' output",
-            network.output_shape,
+            f"{self.__class__.__name__} network output",
+            self.network.output_shape,
             shape_type=DenseTensorShape,
             fields={"features": 1},
         )
@@ -297,7 +307,7 @@ class SkrlValueModel(ValueModel):
         role: str = "",
     ) -> tuple[torch.Tensor, dict[str, Any]]:
         """Compute value output."""
-        return _compute_network(self.get_network(self._cfg.network), inputs)
+        return _compute_network(self.network, inputs)
 
     def act(
         self,
@@ -311,4 +321,4 @@ class SkrlValueModel(ValueModel):
     @property
     def output_shape(self) -> TensorShape:
         """Return model output shape."""
-        return self.get_network(self._cfg.network).output_shape
+        return self.network.output_shape

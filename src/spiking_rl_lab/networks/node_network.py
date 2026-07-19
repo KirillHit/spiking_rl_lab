@@ -8,35 +8,34 @@ from typing import TYPE_CHECKING
 import torch
 from torch import nn
 
-from spiking_rl_lab.networks.base_network import BaseNetwork, ListState
-from spiking_rl_lab.networks.builder import register_network
-from spiking_rl_lab.networks.nodes.builder import NetworkNodeCfg, build_node
+from spiking_rl_lab.core.factory import ConfiguredBase, FactoryConfig
+from spiking_rl_lab.networks.nodes.builder import build_node
 
 if TYPE_CHECKING:
-    from spiking_rl_lab.networks.shape import TensorShape
+    from spiking_rl_lab.networks.types import ListState, TensorShape
 
 
-@register_network("node_graph")
-class NodeNetwork(BaseNetwork):
+class NodeNetwork(nn.Module, ConfiguredBase):
     """Network built from configured nodes."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config(BaseNetwork.Config):
+    class Config:
         """Node-based network configuration."""
 
         init_weights: bool = True
-        nodes: list[NetworkNodeCfg] = dataclasses.field(default_factory=list)
+        nodes: list[FactoryConfig] = dataclasses.field(default_factory=list)
 
         def __post_init__(self) -> None:
             """Convert YAML node mappings to typed node configs."""
             self.nodes = [
-                node if isinstance(node, NetworkNodeCfg) else NetworkNodeCfg(**node)
+                node if isinstance(node, FactoryConfig) else FactoryConfig(**node)
                 for node in self.nodes
             ]
 
     def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
         """Build network nodes from ``cfg.nodes``."""
-        super().__init__(cfg)
+        nn.Module.__init__(self)
+        ConfiguredBase.__init__(self, cfg)
         self._net = nn.ModuleList()
         self._output_shape = input_shape
 

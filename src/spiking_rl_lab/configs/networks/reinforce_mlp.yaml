@@ -1,19 +1,16 @@
-policy_mlp:
-  name: node_graph
-  params:
-    nodes:
-      - name: linear
-        params:
-          out_features: 64
-      - name: lif
-      - name: linear
-        params:
-          out_features: 128
-      - name: lif
-      - name: linear
-        params:
-          out_features: 64
-      - name: li
-      - name: linear
-        params:
-          out_features: 2
+nodes:
+  - name: linear
+    params:
+      out_features: 64
+  - name: lif
+  - name: linear
+    params:
+      out_features: 128
+  - name: lif
+  - name: linear
+    params:
+      out_features: 64
+  - name: li
+  - name: linear
+    params:
+      out_features: 2

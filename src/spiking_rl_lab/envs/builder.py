@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from importlib import import_module
 from typing import TYPE_CHECKING
 
@@ -34,11 +33,6 @@ ENV_BACKEND_SPEC = RegistrySpec[BaseEnvBackend](
 )
 
 
-@dataclass(kw_only=True, slots=True)
-class EnvConfig(FactoryConfig):
-    """Registry-backed environment backend configuration."""
-
-
 def register_env(name: str) -> Callable[[type[BaseEnvBackend]], type[BaseEnvBackend]]:
     """Register an environment backend class under a given name."""
     return register_in_registry(name, ENV_BACKEND_SPEC)
@@ -54,7 +48,7 @@ def _register_env_modules() -> None:
             raise EnvironmentCreationError(msg) from exc
 
 
-def build_env(cfg: EnvConfig) -> Wrapper:
+def build_env(cfg: FactoryConfig) -> Wrapper:
     """Build a skrl-wrapped environment according to the configured backend."""
     log.info("Creating environment using backend '%s'...", cfg.name)
     _register_env_modules()

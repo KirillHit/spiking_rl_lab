@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from importlib import import_module
 from typing import TYPE_CHECKING
 
@@ -18,7 +17,7 @@ from spiking_rl_lab.networks.nodes.base_node import BaseNode
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from spiking_rl_lab.networks.shape import TensorShape
+    from spiking_rl_lab.networks.types import TensorShape
 
 
 NODE_MODULES = (
@@ -37,11 +36,6 @@ NODE_SPEC = RegistrySpec[BaseNode](
 )
 
 
-@dataclass(kw_only=True, slots=True)
-class NetworkNodeCfg(FactoryConfig):
-    """Configuration for a single network node."""
-
-
 def register_node(name: str) -> Callable[[type[BaseNode]], type[BaseNode]]:
     """Register a node class under a given name."""
     return register_in_registry(name, NODE_SPEC)
@@ -57,7 +51,7 @@ def _register_node_modules() -> None:
             raise NetworkCreationError(msg) from exc
 
 
-def build_node(node_cfg: NetworkNodeCfg, input_shape: TensorShape) -> BaseNode:
+def build_node(node_cfg: FactoryConfig, input_shape: TensorShape) -> BaseNode:
     """Build a registered network node from configuration."""
     _register_node_modules()
     return build_configured_instance(

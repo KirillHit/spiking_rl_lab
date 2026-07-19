@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from importlib import import_module
 from typing import TYPE_CHECKING, TypeVar
 
@@ -20,21 +19,12 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from skrl.envs.wrappers.torch import Wrapper
-    from skrl.models.torch import Model
-
 
 log = logging.getLogger(__name__)
 _BUILTIN_AGENT_MODULES = ("spiking_rl_lab.agents.reinforce",)
 _REGISTERED_BUILTIN_MODULES: set[str] = set()
 
 TAgent = TypeVar("TAgent", bound="BaseAgent")
-
-
-@dataclass(kw_only=True, slots=True)
-class AgentConfig(FactoryConfig):
-    """RL algorithm configuration."""
-
-    device: str = "cpu"
 
 
 AGENT_REGISTRY: dict[str, type[BaseAgent]] = {}
@@ -55,7 +45,7 @@ def _register_builtin_agents() -> None:
         _REGISTERED_BUILTIN_MODULES.add(module_name)
 
 
-def build_agent(cfg: AgentConfig, env: Wrapper, models: dict[str, Model]) -> BaseAgent:
+def build_agent(cfg: FactoryConfig, env: Wrapper) -> BaseAgent:
     """Build an agent according to the provided configuration.
 
     Raises:
@@ -69,11 +59,7 @@ def build_agent(cfg: AgentConfig, env: Wrapper, models: dict[str, Model]) -> Bas
         agent = build_configured_instance(
             cfg,
             spec=AGENT_SPEC,
-            dependencies={
-                "env": env,
-                "models": models,
-                "device": cfg.device,
-            },
+            dependencies={"env": env},
         )
     except AgentCreationError:
         raise

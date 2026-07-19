@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from importlib import import_module
 from typing import TYPE_CHECKING
-
-from omegaconf import MISSING
 
 from spiking_rl_lab.core.exception import ModelCreationError
 from spiking_rl_lab.core.factory import (
@@ -17,11 +14,11 @@ from spiking_rl_lab.core.factory import (
     register_in_registry,
 )
 from spiking_rl_lab.models.base_model import BaseModel
-from spiking_rl_lab.networks.builder import NetworkBuildContext, NetworkConfig
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    import torch
     from skrl.envs.wrappers.torch import Wrapper
     from skrl.models.torch import Model
 
@@ -36,14 +33,6 @@ MODEL_SPEC = RegistrySpec[BaseModel](
     error_cls=ModelCreationError,
     kind="model",
 )
-
-
-@dataclass(kw_only=True, slots=True)
-class ModelConfig(FactoryConfig):
-    """Configuration for a single model instance."""
-
-    device: str = "cpu"
-    role: str = MISSING
 
 
 def register_model(name: str) -> Callable[[type[BaseModel]], type[BaseModel]]:
@@ -61,44 +50,32 @@ def _register_model_modules() -> None:
             raise ModelCreationError(msg) from exc
 
 
-def build_models(
-    cfg: list[ModelConfig],
-    networks_cfg: dict[str, NetworkConfig],
+def build_model(
+    cfg: FactoryConfig,
     env: Wrapper,
-) -> dict[str, Model]:
-    """Build experiment models."""
-    models: dict[str, Model] = {}
+    *,
+    device: str | torch.device | None,
+) -> Model:
+    """Build one configured model for an agent."""
     observation_space = env.observation_space
     state_space = env.state_space
     action_space = env.action_space
-    network_builder = NetworkBuildContext(networks_cfg)
     _register_model_modules()
+    log.info("Creating model '%s'...", cfg.name)
 
-    for model_cfg in cfg:
-        role = model_cfg.role
-        log.info("Creating model '%s' with role '%s'...", model_cfg.name, role)
-
-        if role in models:
-            msg = f"Duplicate model role '{role}' in models config"
-            raise ModelCreationError(msg)
-
-        try:
-            model = build_configured_instance(
-                model_cfg,
-                spec=MODEL_SPEC,
-                dependencies={
-                    "observation_space": observation_space,
-                    "state_space": state_space,
-                    "action_space": action_space,
-                    "device": model_cfg.device,
-                    "network_builder": network_builder,
-                },
-            )
-            models[role] = model
-        except ModelCreationError:
-            raise
-        except Exception as exc:
-            msg = f"Failed to create model for role '{role}'"
-            raise ModelCreationError(msg) from exc
-
-    return models
+    try:
+        return build_configured_instance(
+            cfg,
+            spec=MODEL_SPEC,
+            dependencies={
+                "observation_space": observation_space,
+                "state_space": state_space,
+                "action_space": action_space,
+                "device": device,
+            },
+        )
+    except ModelCreationError:
+        raise
+    except Exception as exc:
+        msg = f"Failed to create model '{cfg.name}'"
+        raise ModelCreationError(msg) from exc

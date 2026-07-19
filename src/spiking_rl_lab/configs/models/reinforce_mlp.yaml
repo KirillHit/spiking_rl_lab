@@ -1,5 +1,6 @@
-- role: policy
-  name: categorical_policy
-  device: cuda
-  params:
-    network: policy_mlp
+defaults:
+  - /networks@params.network: reinforce_mlp
+  - _self_
+
+name: categorical_policy
+params: {}

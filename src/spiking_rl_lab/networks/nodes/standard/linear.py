@@ -10,10 +10,10 @@ from torch import nn
 
 from spiking_rl_lab.networks.nodes.base_node import BaseNode
 from spiking_rl_lab.networks.nodes.builder import register_node
-from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape, require_shape
+from spiking_rl_lab.networks.types import DenseTensorShape, TensorShape, require_shape
 
 if TYPE_CHECKING:
-    from spiking_rl_lab.networks.base_network import ListState
+    from spiking_rl_lab.networks.types import ListState
 
 
 @register_node("linear")

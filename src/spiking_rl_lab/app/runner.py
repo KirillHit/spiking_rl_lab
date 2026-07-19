@@ -24,7 +24,6 @@ from spiking_rl_lab.app.tracking import (
 )
 from spiking_rl_lab.core.exception import SpikingRLLabError, TrainerCreationError
 from spiking_rl_lab.envs.builder import build_env
-from spiking_rl_lab.models.builder import build_models
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -121,8 +120,7 @@ class Runner:
 
         """
         env = build_env(cfg.env)
-        models = build_models(cfg.models, cfg.networks, env)
-        agent = build_agent(cfg.agent, env, models)
+        agent = build_agent(cfg.agent, env)
         agent.experiment_dir = cfg.runner.output_dir
         self._load_checkpoint_if_configured(agent=agent, checkpoint_path=cfg.runner.checkpoint_path)
 

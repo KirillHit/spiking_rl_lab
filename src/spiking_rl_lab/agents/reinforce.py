@@ -7,11 +7,14 @@ import time
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
+from omegaconf import MISSING
 from skrl import config
 from skrl.memories.torch import RandomMemory
 
 from spiking_rl_lab.agents.base_agent import BaseAgent
 from spiking_rl_lab.agents.builder import register_agent
+from spiking_rl_lab.core.exception import AgentCreationError
+from spiking_rl_lab.core.factory import FactoryConfig
 from spiking_rl_lab.core.validation import (
     require_minimum,
     require_optional_callable,
@@ -20,20 +23,23 @@ from spiking_rl_lab.core.validation import (
     require_range,
 )
 from spiking_rl_lab.models.base_model import StochasticPolicyModel
+from spiking_rl_lab.models.builder import build_model
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from skrl.envs.wrappers.torch import Wrapper
     from skrl.memories.torch import Memory
-    from skrl.models.torch import Model
 
-    from spiking_rl_lab.networks.base_network import ListState
+    from spiking_rl_lab.networks.types import ListState
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class ReinforceCfg(BaseAgent.Config):
     """Configuration for the REINFORCE agent."""
+
+    policy: FactoryConfig = MISSING
+    """Stochastic policy model used to sample actions."""
 
     rollouts: int = 16
     """Number of environment steps collected before each policy update."""
@@ -85,6 +91,8 @@ class ReinforceCfg(BaseAgent.Config):
 
     def __post_init__(self) -> None:
         """Validate REINFORCE hyperparameters after dataclass initialization."""
+        if not isinstance(self.policy, FactoryConfig):
+            self.policy = FactoryConfig(**self.policy)
         require_minimum("rollouts", self.rollouts, minimum=1)
         require_minimum("mini_batches", self.mini_batches, minimum=1)
         require_range("discount_factor", self.discount_factor, minimum=0.0, maximum=1.0)
@@ -131,7 +139,6 @@ class Reinforce(BaseAgent):
     """REINFORCE agent implementation."""
 
     Config: ClassVar[type[ReinforceCfg]] = ReinforceCfg
-    model_contracts: ClassVar[dict[str, type[Model]]] = {"policy": StochasticPolicyModel}
 
     def build_memory(self, *, env: Wrapper) -> Memory | None:
         """Build rollout memory sized for at least one REINFORCE update window."""
@@ -146,19 +153,28 @@ class Reinforce(BaseAgent):
         cfg: ReinforceCfg,
         *,
         env: Wrapper,
-        models: dict[str, Model],
-        device: str | torch.device | None,
     ) -> None:
         """REINFORCE agent implementation."""
         self.cfg: ReinforceCfg
+        try:
+            policy = build_model(cfg.policy, env, device=cfg.device)
+        except Exception as exc:
+            msg = "Failed to create REINFORCE policy model"
+            raise AgentCreationError(msg) from exc
+
+        if not isinstance(policy, StochasticPolicyModel):
+            msg = (
+                f"REINFORCE policy must inherit StochasticPolicyModel, got {type(policy).__name__}"
+            )
+            raise AgentCreationError(msg)
+
         super().__init__(
             cfg,
             env=env,
-            models=models,
-            device=device,
+            models={"policy": policy},
         )
 
-        self.policy = self.models["policy"]
+        self.policy: StochasticPolicyModel = policy
         self.checkpoint_modules["policy"] = self.policy
 
         if config.torch.is_distributed:

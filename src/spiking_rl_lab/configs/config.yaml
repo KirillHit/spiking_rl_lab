@@ -3,8 +3,6 @@ defaults:
   - agent: reinforce
   - env: cartpole_v1
   - optuna: base
-  - networks: reinforce_mlp
-  - models: reinforce_mlp
   - runner: base
   - trainer: base
   - override hydra/job_logging: colorlog

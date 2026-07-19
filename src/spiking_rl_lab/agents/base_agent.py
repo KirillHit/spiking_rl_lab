@@ -5,17 +5,15 @@ from __future__ import annotations
 import dataclasses
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 import mlflow
 import numpy as np
 from skrl.agents.torch import Agent, AgentCfg
 
-from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.factory import ConfiguredBase
 
 if TYPE_CHECKING:
-    import torch
     from skrl.envs.wrappers.torch import Wrapper
     from skrl.memories.torch import Memory
     from skrl.models.torch import Model
@@ -28,22 +26,7 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
     class Config(AgentCfg):
         """Base class for the agent's configuration."""
 
-    model_contracts: ClassVar[dict[str, type[Model]]] = {}
-
-    @classmethod
-    def _validate_models(cls, models: dict[str, Model]) -> None:
-        """Validate that supplied models satisfy this agent's requirements."""
-        for role, model_cls in cls.model_contracts.items():
-            model = models.get(role)
-            if model is None:
-                msg = f"Agent '{cls.__name__}' requires model role '{role}'"
-                raise AgentCreationError(msg)
-            if not isinstance(model, model_cls):
-                msg = (
-                    f"Agent '{cls.__name__}' requires {model_cls.__name__} for role "
-                    f"'{role}', got {type(model).__name__}"
-                )
-                raise AgentCreationError(msg)
+        device: str = "cpu"
 
     def __init__(
         self,
@@ -51,10 +34,8 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
         *,
         env: Wrapper,
         models: dict[str, Model],
-        device: str | torch.device | None = None,
     ) -> None:
         """Initialize common tracking state."""
-        self._validate_models(models)
         ConfiguredBase.__init__(self, cfg)
         Agent.__init__(
             self,
@@ -64,7 +45,7 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
             observation_space=env.observation_space,
             state_space=env.state_space,
             action_space=env.action_space,
-            device=device,
+            device=cfg.device,
         )
         self.memory = self.build_memory(env=env)
         self.last_tracking_metrics: dict[str, float] = {}
