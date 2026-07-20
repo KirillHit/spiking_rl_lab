@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from importlib import import_module
 from typing import TYPE_CHECKING, TypeVar
 
 from spiking_rl_lab.agents.base_agent import BaseAgent
@@ -13,6 +12,7 @@ from spiking_rl_lab.core.factory import (
     FactoryConfig,
     RegistrySpec,
     build_configured_instance,
+    import_registry_modules,
     register_in_registry,
 )
 
@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 _BUILTIN_AGENT_MODULES = ("spiking_rl_lab.agents.reinforce",)
-_REGISTERED_BUILTIN_MODULES: set[str] = set()
 
 TAgent = TypeVar("TAgent", bound="BaseAgent")
 
@@ -42,15 +41,6 @@ class AgentConfig(FactoryConfig):
     """Configuration for a registered agent."""
 
 
-def _register_builtin_agents() -> None:
-    """Import built-in agents once so decorators register them."""
-    for module_name in _BUILTIN_AGENT_MODULES:
-        if module_name in _REGISTERED_BUILTIN_MODULES:
-            continue
-        import_module(module_name)
-        _REGISTERED_BUILTIN_MODULES.add(module_name)
-
-
 def build_agent(cfg: AgentConfig, env: Wrapper) -> BaseAgent:
     """Build an agent according to the provided configuration.
 
@@ -59,7 +49,7 @@ def build_agent(cfg: AgentConfig, env: Wrapper) -> BaseAgent:
 
     """
     log.info("Creating agent '%s'...", cfg.name)
-    _register_builtin_agents()
+    import_registry_modules(_BUILTIN_AGENT_MODULES, AGENT_SPEC)
 
     try:
         agent = build_configured_instance(

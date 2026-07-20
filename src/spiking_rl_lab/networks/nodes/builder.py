@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import import_module
 from typing import TYPE_CHECKING
 
 from spiking_rl_lab.core.exception import NetworkCreationError
@@ -11,6 +10,7 @@ from spiking_rl_lab.core.factory import (
     FactoryConfig,
     RegistrySpec,
     build_configured_instance,
+    import_registry_modules,
     register_in_registry,
 )
 from spiking_rl_lab.networks.nodes.base_node import BaseNode
@@ -47,19 +47,9 @@ def register_node(name: str) -> Callable[[type[BaseNode]], type[BaseNode]]:
     return register_in_registry(name, NODE_SPEC)
 
 
-def _register_node_modules() -> None:
-    """Import built-in node modules so decorators register them."""
-    for module_name in NODE_MODULES:
-        try:
-            import_module(module_name)
-        except ImportError as exc:
-            msg = f"Failed to import network node module '{module_name}': {exc}"
-            raise NetworkCreationError(msg) from exc
-
-
 def build_node(node_cfg: NodeConfig, input_shape: TensorShape) -> BaseNode:
     """Build a registered network node from configuration."""
-    _register_node_modules()
+    import_registry_modules(NODE_MODULES, NODE_SPEC)
     return build_configured_instance(
         node_cfg,
         spec=NODE_SPEC,

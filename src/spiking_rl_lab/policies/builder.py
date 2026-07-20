@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from importlib import import_module
 from typing import TYPE_CHECKING
 
 from spiking_rl_lab.core.exception import PolicyCreationError
@@ -12,6 +11,7 @@ from spiking_rl_lab.core.factory import (
     FactoryConfig,
     RegistrySpec,
     build_configured_instance,
+    import_registry_modules,
     register_in_registry,
 )
 from spiking_rl_lab.policies.base_policy import BasePolicy
@@ -44,23 +44,13 @@ def register_policy(name: str) -> Callable[[type[BasePolicy]], type[BasePolicy]]
     return register_in_registry(name, POLICY_SPEC)
 
 
-def _register_policy_modules() -> None:
-    """Import policy implementations so decorators register them."""
-    for module_name in POLICY_MODULES:
-        try:
-            import_module(module_name)
-        except ImportError as exc:
-            msg = f"Failed to import policy module '{module_name}': {exc}"
-            raise PolicyCreationError(msg) from exc
-
-
 def build_policy(
     cfg: PolicyConfig,
     *,
     action_space: gymnasium.Space,
 ) -> BasePolicy:
     """Build one configured policy adapter."""
-    _register_policy_modules()
+    import_registry_modules(POLICY_MODULES, POLICY_SPEC)
     log.info("Creating policy '%s'...", cfg.name)
     try:
         return build_configured_instance(

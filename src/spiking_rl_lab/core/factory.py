@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass, field
+from importlib import import_module
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from omegaconf import MISSING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, MutableMapping
+    from collections.abc import Callable, Iterable, Mapping, MutableMapping
 
 
 @dataclass(kw_only=True, slots=True)
@@ -98,3 +99,16 @@ def register_in_registry[TBase](
         return cls
 
     return decorator
+
+
+def import_registry_modules[TBase](
+    module_names: Iterable[str],
+    spec: RegistrySpec[TBase],
+) -> None:
+    """Import modules whose decorators populate a registry."""
+    for module_name in module_names:
+        try:
+            import_module(module_name)
+        except ImportError as exc:
+            msg = f"Failed to import {spec.kind} module '{module_name}': {exc}"
+            raise spec.error_cls(msg) from exc

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from importlib import import_module
 from typing import TYPE_CHECKING
 
 from spiking_rl_lab.core.exception import EnvironmentCreationError
@@ -12,6 +11,7 @@ from spiking_rl_lab.core.factory import (
     FactoryConfig,
     RegistrySpec,
     build_configured_instance,
+    import_registry_modules,
     register_in_registry,
 )
 from spiking_rl_lab.envs.base_env import BaseEnvBackend
@@ -44,20 +44,10 @@ def register_env(name: str) -> Callable[[type[BaseEnvBackend]], type[BaseEnvBack
     return register_in_registry(name, ENV_BACKEND_SPEC)
 
 
-def _register_env_modules() -> None:
-    """Import environment backend modules so decorators register them."""
-    for module_name in ENV_BACKEND_MODULES:
-        try:
-            import_module(module_name)
-        except ImportError as exc:
-            msg = f"Failed to import environment backend module '{module_name}': {exc}"
-            raise EnvironmentCreationError(msg) from exc
-
-
 def build_env(cfg: EnvironmentConfig) -> Wrapper:
     """Build a skrl-wrapped environment according to the configured backend."""
     log.info("Creating environment using backend '%s'...", cfg.name)
-    _register_env_modules()
+    import_registry_modules(ENV_BACKEND_MODULES, ENV_BACKEND_SPEC)
 
     backend = build_configured_instance(
         cfg,
