@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+from contextlib import contextmanager
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -26,6 +27,7 @@ from spiking_rl_lab.core.exception import SpikingRLLabError, TrainerCreationErro
 from spiking_rl_lab.envs.builder import build_env
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
     from spiking_rl_lab.agents.base_agent import BaseAgent
@@ -73,10 +75,9 @@ class Runner:
             log_hardware_info(cfg.runner.output_dir)
 
             try:
-                trainer = self._generate_trainer(cfg)
-
-                log.info("Starting training...")
-                trainer.train()
+                with self._trainer_context(cfg) as trainer:
+                    log.info("Starting training...")
+                    trainer.train()
 
                 best_checkpoint = cfg.runner.output_dir / "checkpoints" / "best_agent.pt"
                 if best_checkpoint.exists():
@@ -93,12 +94,12 @@ class Runner:
     def evaluate(self, cfg: BaseConfig, checkpoint_path: Path | None = None) -> None:
         """Run the evaluation loop."""
         eval_cfg = self._prepare_eval_config(cfg, checkpoint_path)
-        trainer = self._generate_trainer(eval_cfg)
 
-        log.info("Starting evaluation...")
-        trainer.eval()
+        with self._trainer_context(eval_cfg) as trainer:
+            log.info("Starting evaluation...")
+            trainer.eval()
+            score = trainer.agents.last_tracking_metrics.get("Eval / Reward / Total reward_mean")
 
-        score = trainer.agents.last_tracking_metrics.get("Eval / Reward / Total reward_mean")
         if score is None:
             log.warning("Evaluation finished without a tracked total reward metric")
             return
@@ -109,8 +110,9 @@ class Runner:
         """Run hyperparameter optimization."""
         raise NotImplementedError
 
-    def _generate_trainer(self, cfg: BaseConfig) -> Trainer:
-        """Instantiate environment, agent, and trainer.
+    @contextmanager
+    def _trainer_context(self, cfg: BaseConfig) -> Iterator[Trainer]:
+        """Yield a configured trainer and close its environment afterwards.
 
         Returns:
             Trainer: Configured skrl trainer instance.
@@ -120,16 +122,25 @@ class Runner:
 
         """
         env = build_env(cfg.env)
-        agent = build_agent(cfg.agent, env)
-        agent.experiment_dir = cfg.runner.output_dir
-        self._load_checkpoint_if_configured(agent=agent, checkpoint_path=cfg.runner.checkpoint_path)
-
         try:
-            trainer_class = ParallelTrainer if cfg.trainer.use_parallel else SequentialTrainer
-            return trainer_class(env=env, agents=agent, cfg=cfg.trainer.params)
-        except Exception as exc:
-            msg = "Failed to create trainer"
-            raise TrainerCreationError(msg) from exc
+            agent = build_agent(cfg.agent, env)
+            agent.experiment_dir = cfg.runner.output_dir
+            self._load_checkpoint_if_configured(
+                agent=agent,
+                checkpoint_path=cfg.runner.checkpoint_path,
+            )
+
+            try:
+                trainer_class = ParallelTrainer if cfg.trainer.use_parallel else SequentialTrainer
+                trainer = trainer_class(env=env, agents=agent, cfg=cfg.trainer.params)
+            except Exception as exc:
+                msg = "Failed to create trainer"
+                raise TrainerCreationError(msg) from exc
+
+            yield trainer
+        finally:
+            log.info("Closing environment...")
+            env.close()
 
     def _load_checkpoint_if_configured(
         self,

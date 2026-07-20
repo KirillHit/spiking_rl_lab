@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -56,6 +57,8 @@ class GymnasiumBackend(BaseEnvBackend):
         try:
             wrapped_env = wrap_env(env, verbose=False)
         except Exception as exc:
+            with suppress(Exception):
+                env.close()
             msg = f"Failed to wrap Gymnasium environment '{self._cfg.id}': {exc}"
             raise EnvironmentCreationError(msg) from exc
 

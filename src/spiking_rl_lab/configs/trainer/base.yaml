@@ -3,3 +3,4 @@ eval_timesteps: 10000
 params:
   timesteps: 20000
   headless: true
+  close_environment_at_exit: false
