@@ -15,7 +15,6 @@ from skrl.memories.torch import RandomMemory
 from spiking_rl_lab.agents.base_agent import BaseAgent
 from spiking_rl_lab.agents.builder import register_agent
 from spiking_rl_lab.core.exception import AgentCreationError
-from spiking_rl_lab.core.factory import FactoryConfig
 from spiking_rl_lab.core.validation import (
     require_minimum,
     require_optional_callable,
@@ -24,10 +23,10 @@ from spiking_rl_lab.core.validation import (
     require_range,
     require_shape_fields,
 )
-from spiking_rl_lab.networks.node_network import NodeNetwork
+from spiking_rl_lab.networks.node_network import NodeNetwork, NodeNetworkConfig
 from spiking_rl_lab.networks.types import DenseTensorShape, TensorShape
 from spiking_rl_lab.policies.base_policy import BasePolicy
-from spiking_rl_lab.policies.builder import build_policy
+from spiking_rl_lab.policies.builder import PolicyConfig, build_policy
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -39,13 +38,13 @@ if TYPE_CHECKING:
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
-class ReinforceCfg(BaseAgent.Config):
+class ReinforceConfig(BaseAgent.Config):
     """Configuration for the REINFORCE agent."""
 
-    policy_network: NodeNetwork.Config = MISSING
+    policy_network: NodeNetworkConfig = MISSING
     """Network that produces policy distribution parameters."""
 
-    policy: FactoryConfig = MISSING
+    policy: PolicyConfig = MISSING
     """Policy adapter that interprets network outputs."""
 
     rollouts: int = 16
@@ -98,10 +97,10 @@ class ReinforceCfg(BaseAgent.Config):
 
     def __post_init__(self) -> None:
         """Validate REINFORCE hyperparameters after dataclass initialization."""
-        if not isinstance(self.policy_network, NodeNetwork.Config):
-            self.policy_network = NodeNetwork.Config(**self.policy_network)
-        if not isinstance(self.policy, FactoryConfig):
-            self.policy = FactoryConfig(**self.policy)
+        if not isinstance(self.policy_network, NodeNetworkConfig):
+            self.policy_network = NodeNetworkConfig(**self.policy_network)
+        if not isinstance(self.policy, PolicyConfig):
+            self.policy = PolicyConfig(**self.policy)
         require_minimum("rollouts", self.rollouts, minimum=1)
         require_minimum("mini_batches", self.mini_batches, minimum=1)
         require_range("discount_factor", self.discount_factor, minimum=0.0, maximum=1.0)
@@ -183,7 +182,7 @@ def _detach_hidden_states[StateT](hidden_states: StateT) -> StateT:
 class Reinforce(BaseAgent):
     """REINFORCE agent implementation."""
 
-    Config: ClassVar[type[ReinforceCfg]] = ReinforceCfg
+    Config: ClassVar[type[ReinforceConfig]] = ReinforceConfig
 
     def build_memory(self, *, env: Wrapper) -> Memory | None:
         """Build rollout memory sized for at least one REINFORCE update window."""
@@ -195,12 +194,12 @@ class Reinforce(BaseAgent):
 
     def __init__(
         self,
-        cfg: ReinforceCfg,
+        cfg: ReinforceConfig,
         *,
         env: Wrapper,
     ) -> None:
         """REINFORCE agent implementation."""
-        self.cfg: ReinforceCfg
+        self.cfg: ReinforceConfig
         try:
             policy_network = NodeNetwork(
                 cfg.policy_network,

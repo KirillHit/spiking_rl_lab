@@ -8,7 +8,8 @@ from typing import Any
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
-from spiking_rl_lab.core.factory import FactoryConfig
+from spiking_rl_lab.agents.builder import AgentConfig
+from spiking_rl_lab.envs.builder import EnvironmentConfig
 
 
 class RunnerMode(StrEnum):
@@ -67,8 +68,8 @@ class OptunaConfig:
 class BaseConfig:
     """Top-level experiment configuration containing mode, seed, and subconfigs."""
 
-    env: FactoryConfig = field(default_factory=FactoryConfig)
-    agent: FactoryConfig = field(default_factory=FactoryConfig)
+    env: EnvironmentConfig = field(default_factory=EnvironmentConfig)
+    agent: AgentConfig = field(default_factory=AgentConfig)
     runner: RunnerConfig = field(default_factory=RunnerConfig)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
     optuna: OptunaConfig = field(default_factory=OptunaConfig)

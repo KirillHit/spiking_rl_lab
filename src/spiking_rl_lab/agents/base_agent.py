@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 
 import mlflow
 import numpy as np
-from skrl.agents.torch import Agent, AgentCfg
+from skrl.agents.torch import Agent
+from skrl.agents.torch import AgentCfg as SkrlAgentConfig
 
 from spiking_rl_lab.core.factory import ConfiguredBase
 
@@ -22,7 +23,7 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
     """Common utilities for agents used in this project."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config(AgentCfg):
+    class Config(SkrlAgentConfig):
         """Base class for the agent's configuration."""
 
         device: str = "cpu"

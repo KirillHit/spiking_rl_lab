@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from importlib import import_module
 from typing import TYPE_CHECKING, TypeVar
 
@@ -36,6 +37,11 @@ AGENT_SPEC = RegistrySpec[BaseAgent](
 )
 
 
+@dataclass(kw_only=True, slots=True)
+class AgentConfig(FactoryConfig):
+    """Configuration for a registered agent."""
+
+
 def _register_builtin_agents() -> None:
     """Import built-in agents once so decorators register them."""
     for module_name in _BUILTIN_AGENT_MODULES:
@@ -45,7 +51,7 @@ def _register_builtin_agents() -> None:
         _REGISTERED_BUILTIN_MODULES.add(module_name)
 
 
-def build_agent(cfg: FactoryConfig, env: Wrapper) -> BaseAgent:
+def build_agent(cfg: AgentConfig, env: Wrapper) -> BaseAgent:
     """Build an agent according to the provided configuration.
 
     Raises:

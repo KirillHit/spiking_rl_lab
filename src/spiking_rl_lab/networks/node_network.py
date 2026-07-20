@@ -3,36 +3,39 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import torch
 from torch import nn
 
-from spiking_rl_lab.core.factory import ConfiguredBase, FactoryConfig
-from spiking_rl_lab.networks.nodes.builder import build_node
+from spiking_rl_lab.core.factory import ConfiguredBase
+from spiking_rl_lab.networks.nodes.builder import NetworkNodeConfig, build_node
 
 if TYPE_CHECKING:
     from spiking_rl_lab.networks.types import ListState, TensorShape
 
 
+@dataclasses.dataclass(kw_only=True, slots=True)
+class NodeNetworkConfig:
+    """Configuration for a node-based network."""
+
+    init_weights: bool = True
+    nodes: list[NetworkNodeConfig] = dataclasses.field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        """Convert YAML node mappings to typed node configs."""
+        self.nodes = [
+            node if isinstance(node, NetworkNodeConfig) else NetworkNodeConfig(**node)
+            for node in self.nodes
+        ]
+
+
 class NodeNetwork(nn.Module, ConfiguredBase):
     """Network built from configured nodes."""
 
-    @dataclasses.dataclass(kw_only=True, slots=True)
-    class Config:
-        """Node-based network configuration."""
+    Config: ClassVar[type[NodeNetworkConfig]] = NodeNetworkConfig
 
-        init_weights: bool = True
-        nodes: list[FactoryConfig] = dataclasses.field(default_factory=list)
-
-        def __post_init__(self) -> None:
-            """Convert YAML node mappings to typed node configs."""
-            self.nodes = [
-                node if isinstance(node, FactoryConfig) else FactoryConfig(**node)
-                for node in self.nodes
-            ]
-
-    def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
+    def __init__(self, cfg: NodeNetworkConfig, input_shape: TensorShape) -> None:
         """Build network nodes from ``cfg.nodes``."""
         nn.Module.__init__(self)
         ConfiguredBase.__init__(self, cfg)

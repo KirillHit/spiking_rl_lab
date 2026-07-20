@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from importlib import import_module
 from typing import TYPE_CHECKING
 
@@ -33,6 +34,11 @@ POLICY_SPEC = RegistrySpec[BasePolicy](
 )
 
 
+@dataclass(kw_only=True, slots=True)
+class PolicyConfig(FactoryConfig):
+    """Configuration for a registered policy adapter."""
+
+
 def register_policy(name: str) -> Callable[[type[BasePolicy]], type[BasePolicy]]:
     """Register a policy class under ``name``."""
     return register_in_registry(name, POLICY_SPEC)
@@ -49,7 +55,7 @@ def _register_policy_modules() -> None:
 
 
 def build_policy(
-    cfg: FactoryConfig,
+    cfg: PolicyConfig,
     *,
     action_space: gymnasium.Space,
 ) -> BasePolicy:
