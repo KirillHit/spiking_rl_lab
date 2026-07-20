@@ -38,7 +38,7 @@ NODE_SPEC = RegistrySpec[BaseNode](
 
 
 @dataclass(kw_only=True, slots=True)
-class NetworkNodeConfig(FactoryConfig):
+class NodeConfig(FactoryConfig):
     """Configuration for one registered network node."""
 
 
@@ -57,7 +57,7 @@ def _register_node_modules() -> None:
             raise NetworkCreationError(msg) from exc
 
 
-def build_node(node_cfg: NetworkNodeConfig, input_shape: TensorShape) -> BaseNode:
+def build_node(node_cfg: NodeConfig, input_shape: TensorShape) -> BaseNode:
     """Build a registered network node from configuration."""
     _register_node_modules()
     return build_configured_instance(

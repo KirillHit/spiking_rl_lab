@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 from spiking_rl_lab.core.factory import ConfiguredBase
-from spiking_rl_lab.networks.nodes.builder import NetworkNodeConfig, build_node
+from spiking_rl_lab.networks.nodes.builder import NodeConfig, build_node
 
 if TYPE_CHECKING:
     from spiking_rl_lab.networks.types import ListState, TensorShape
@@ -20,13 +20,12 @@ class NodeNetworkConfig:
     """Configuration for a node-based network."""
 
     init_weights: bool = True
-    nodes: list[NetworkNodeConfig] = dataclasses.field(default_factory=list)
+    nodes: list[NodeConfig] = dataclasses.field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Convert YAML node mappings to typed node configs."""
         self.nodes = [
-            node if isinstance(node, NetworkNodeConfig) else NetworkNodeConfig(**node)
-            for node in self.nodes
+            node if isinstance(node, NodeConfig) else NodeConfig(**node) for node in self.nodes
         ]
 
 
