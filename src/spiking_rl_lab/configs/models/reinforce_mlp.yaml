@@ -1,6 +1,0 @@
-defaults:
-  - /networks@params.network: reinforce_mlp
-  - _self_
-
-name: categorical_policy
-params: {}

@@ -110,7 +110,7 @@ class Runner:
         raise NotImplementedError
 
     def _generate_trainer(self, cfg: BaseConfig) -> Trainer:
-        """Instantiate environment, models, agent, and trainer.
+        """Instantiate environment, agent, and trainer.
 
         Returns:
             Trainer: Configured skrl trainer instance.

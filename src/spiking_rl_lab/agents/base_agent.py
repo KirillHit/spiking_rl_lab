@@ -16,7 +16,6 @@ from spiking_rl_lab.core.factory import ConfiguredBase
 if TYPE_CHECKING:
     from skrl.envs.wrappers.torch import Wrapper
     from skrl.memories.torch import Memory
-    from skrl.models.torch import Model
 
 
 class BaseAgent(Agent, ConfiguredBase, ABC):
@@ -33,7 +32,7 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
         cfg: Config,
         *,
         env: Wrapper,
-        models: dict[str, Model],
+        models: dict[str, object],
     ) -> None:
         """Initialize common tracking state."""
         ConfiguredBase.__init__(self, cfg)

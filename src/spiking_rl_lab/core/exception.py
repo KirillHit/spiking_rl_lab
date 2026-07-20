@@ -9,8 +9,8 @@ class EnvironmentCreationError(SpikingRLLabError):
     """Raised when an environment cannot be created."""
 
 
-class ModelCreationError(SpikingRLLabError):
-    """Raised when a model cannot be created."""
+class PolicyCreationError(SpikingRLLabError):
+    """Raised when a policy cannot be created."""
 
 
 class AgentCreationError(SpikingRLLabError):

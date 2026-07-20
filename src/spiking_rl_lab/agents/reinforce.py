@@ -7,6 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
+from gymnasium.spaces.utils import flatdim
 from omegaconf import MISSING
 from skrl import config
 from skrl.memories.torch import RandomMemory
@@ -21,9 +22,12 @@ from spiking_rl_lab.core.validation import (
     require_optional_class,
     require_positive,
     require_range,
+    require_shape_fields,
 )
-from spiking_rl_lab.models.base_model import StochasticPolicyModel
-from spiking_rl_lab.models.builder import build_model
+from spiking_rl_lab.networks.node_network import NodeNetwork
+from spiking_rl_lab.networks.types import DenseTensorShape, TensorShape
+from spiking_rl_lab.policies.base_policy import BasePolicy
+from spiking_rl_lab.policies.builder import build_policy
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -38,8 +42,11 @@ if TYPE_CHECKING:
 class ReinforceCfg(BaseAgent.Config):
     """Configuration for the REINFORCE agent."""
 
+    policy_network: NodeNetwork.Config = MISSING
+    """Network that produces policy distribution parameters."""
+
     policy: FactoryConfig = MISSING
-    """Stochastic policy model used to sample actions."""
+    """Policy adapter that interprets network outputs."""
 
     rollouts: int = 16
     """Number of environment steps collected before each policy update."""
@@ -91,6 +98,8 @@ class ReinforceCfg(BaseAgent.Config):
 
     def __post_init__(self) -> None:
         """Validate REINFORCE hyperparameters after dataclass initialization."""
+        if not isinstance(self.policy_network, NodeNetwork.Config):
+            self.policy_network = NodeNetwork.Config(**self.policy_network)
         if not isinstance(self.policy, FactoryConfig):
             self.policy = FactoryConfig(**self.policy)
         require_minimum("rollouts", self.rollouts, minimum=1)
@@ -116,6 +125,42 @@ class ReinforceCfg(BaseAgent.Config):
             "rewards_shaper",
             self.rewards_shaper,
         )
+
+
+def _dense_observation_shape(observation_space: object) -> DenseTensorShape:
+    """Return the dense shape consumed by REINFORCE policy networks."""
+    return TensorShape.dense(flatdim(observation_space))
+
+
+def _flatten_observations(observations: torch.Tensor) -> torch.Tensor:
+    """Flatten observations to the dense network input shape."""
+    return observations.view(observations.shape[0], -1)
+
+
+def _broadcast_network(network: NodeNetwork) -> None:
+    """Broadcast one network state in distributed training."""
+    state = [network.state_dict()]
+    torch.distributed.broadcast_object_list(state, 0)
+    network.load_state_dict(state[0])
+
+
+def _reduce_network_gradients(network: NodeNetwork) -> None:
+    """Average network gradients across distributed workers."""
+    gradients = [
+        parameter.grad.view(-1) for parameter in network.parameters() if parameter.grad is not None
+    ]
+    if not gradients:
+        return
+    flattened = torch.cat(gradients)
+    torch.distributed.all_reduce(flattened, op=torch.distributed.ReduceOp.SUM)
+    offset = 0
+    for parameter in network.parameters():
+        if parameter.grad is not None:
+            parameter.grad.copy_(
+                flattened[offset : offset + parameter.numel()].view_as(parameter.grad)
+                / config.torch.world_size
+            )
+            offset += parameter.numel()
 
 
 def _detach_hidden_states[StateT](hidden_states: StateT) -> StateT:
@@ -157,28 +202,37 @@ class Reinforce(BaseAgent):
         """REINFORCE agent implementation."""
         self.cfg: ReinforceCfg
         try:
-            policy = build_model(cfg.policy, env, device=cfg.device)
+            policy_network = NodeNetwork(
+                cfg.policy_network,
+                _dense_observation_shape(env.observation_space),
+            ).to(cfg.device)
+            require_shape_fields(
+                "REINFORCE policy network output",
+                policy_network.output_shape,
+                shape_type=DenseTensorShape,
+                fields={"features": flatdim(env.action_space)},
+            )
+            policy = build_policy(cfg.policy, action_space=env.action_space)
         except Exception as exc:
-            msg = "Failed to create REINFORCE policy model"
+            msg = "Failed to create REINFORCE policy components"
             raise AgentCreationError(msg) from exc
 
-        if not isinstance(policy, StochasticPolicyModel):
-            msg = (
-                f"REINFORCE policy must inherit StochasticPolicyModel, got {type(policy).__name__}"
-            )
+        if not isinstance(policy, BasePolicy):
+            msg = f"REINFORCE policy must inherit BasePolicy, got {type(policy).__name__}"
             raise AgentCreationError(msg)
 
         super().__init__(
             cfg,
             env=env,
-            models={"policy": policy},
+            models={},
         )
 
-        self.policy: StochasticPolicyModel = policy
-        self.checkpoint_modules["policy"] = self.policy
+        self.policy_network = policy_network
+        self.policy = policy
+        self.checkpoint_modules["policy_network"] = self.policy_network
 
         if config.torch.is_distributed:
-            self.policy.broadcast_parameters()
+            _broadcast_network(self.policy_network)
 
         self._device_type = torch.device(self.device).type
         self.scaler = torch.amp.GradScaler(
@@ -186,7 +240,10 @@ class Reinforce(BaseAgent):
             enabled=self.cfg.mixed_precision,
         )
 
-        self.optimizer = torch.optim.Adamax(self.policy.parameters(), lr=self.cfg.learning_rate)
+        self.optimizer = torch.optim.Adamax(
+            self.policy_network.parameters(),
+            lr=self.cfg.learning_rate,
+        )
         self.checkpoint_modules["optimizer"] = self.optimizer
 
         self.scheduler = None
@@ -227,7 +284,7 @@ class Reinforce(BaseAgent):
     def init(self, *, trainer_cfg: dict[str, Any] | None = None) -> None:
         """Initialize the agent."""
         super().init(trainer_cfg=trainer_cfg)
-        self.enable_models_training_mode(enabled=False)
+        self.policy_network.eval()
 
         self.memory.create_tensor(
             name="observations",
@@ -261,18 +318,32 @@ class Reinforce(BaseAgent):
         if self._hidden_states is not None:
             inputs["hidden_states"] = self._hidden_states
 
-        if timestep < self.cfg.random_timesteps:
+        if self.training and timestep < self.cfg.random_timesteps:
             self._current_log_prob = None
-            return self.policy.random_act(inputs, role="policy")
+            actions = torch.as_tensor(
+                [self.action_space.sample() for _ in range(observations.shape[0])],
+                device=self.device,
+            )
+            if actions.ndim == 1:
+                actions = actions.unsqueeze(-1)
+            return actions, {}
 
         with torch.autocast(device_type=self._device_type, enabled=self.cfg.mixed_precision):
-            actions, outputs = self.policy.act(inputs, role="policy")
+            logits, hidden_states = self.policy_network(
+                _flatten_observations(inputs["observations"]),
+                inputs.get("hidden_states"),
+            )
+            distribution = self.policy.distribution({"logits": logits})
+            actions = distribution.sample() if self.training else distribution.mode()
+            log_prob = distribution.log_prob(actions) if self.training else None
 
-        self._current_log_prob = outputs["log_prob"]
-        if "hidden_states" in outputs:
-            self._hidden_states = _detach_hidden_states(outputs["hidden_states"])
+        self._hidden_states = _detach_hidden_states(hidden_states)
+        if not self.training:
+            self._current_log_prob = None
+            return actions, {}
 
-        return actions, outputs
+        self._current_log_prob = log_prob
+        return actions, {"log_prob": log_prob}
 
     def record_transition(
         self,
@@ -329,9 +400,9 @@ class Reinforce(BaseAgent):
             self._rollout += 1
             if not self._rollout % self.cfg.rollouts:
                 started_at = time.perf_counter()
-                self.enable_models_training_mode(enabled=True)
+                self.policy_network.train()
                 self.update(timestep=timestep, timesteps=timesteps)
-                self.enable_models_training_mode(enabled=False)
+                self.policy_network.eval()
                 elapsed_time_ms = (time.perf_counter() - started_at) * 1_000
                 self.track_data("Stats / Algorithm update time (ms)", elapsed_time_ms)
 
@@ -377,25 +448,14 @@ class Reinforce(BaseAgent):
     ) -> tuple[float, float]:
         """Update the policy on a single mini-batch."""
         with torch.autocast(device_type=self._device_type, enabled=self.cfg.mixed_precision):
-            inputs = {
-                "observations": self._observation_preprocessor(
-                    sampled_observations,
-                    train=True,
-                ),
-                "states": self._state_preprocessor(sampled_states, train=True),
-                "taken_actions": sampled_actions,
-            }
-            _, outputs = self.policy.act(inputs, role="policy")
-            log_prob = outputs["log_prob"]
+            observations = self._observation_preprocessor(sampled_observations, train=True)
+            logits, _ = self.policy_network(_flatten_observations(observations))
+            distribution = self.policy.distribution({"logits": logits})
+            log_prob = distribution.log_prob(sampled_actions)
 
             policy_loss = -(sampled_returns * log_prob).mean()
             if self.cfg.entropy_loss_scale:
-                entropy_loss = (
-                    -self.cfg.entropy_loss_scale
-                    * self.policy.get_entropy(
-                        role="policy",
-                    ).mean()
-                )
+                entropy_loss = -self.cfg.entropy_loss_scale * distribution.entropy().mean()
             else:
                 entropy_loss = torch.zeros((), device=self.device)
 
@@ -403,12 +463,12 @@ class Reinforce(BaseAgent):
         self.scaler.scale(policy_loss + entropy_loss).backward()
 
         if config.torch.is_distributed:
-            self.policy.reduce_parameters()
+            _reduce_network_gradients(self.policy_network)
 
         if self.cfg.grad_norm_clip > 0:
             self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(
-                self.policy.parameters(),
+                self.policy_network.parameters(),
                 self.cfg.grad_norm_clip,
             )
 
@@ -457,9 +517,5 @@ class Reinforce(BaseAgent):
             self.track_data("Loss / Entropy loss", cumulative_entropy_loss / len(sampled_batches))
         if self.scheduler is not None:
             self.track_data("Learning / Learning rate", self.scheduler.get_last_lr()[0])
-
-        distribution = self.policy.distribution(role="policy")
-        if hasattr(distribution, "stddev"):
-            self.track_data("Policy / Standard deviation", distribution.stddev.mean().item())
 
         self.memory.reset()

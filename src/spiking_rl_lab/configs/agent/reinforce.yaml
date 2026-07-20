@@ -1,10 +1,13 @@
 defaults:
-  - /models@params.policy: reinforce_mlp
+  - /networks@params.policy_network: reinforce_mlp
   - _self_
 
 name: reinforce
 params:
   device: cuda
+  policy:
+    name: categorical
+    params: {}
   rollouts: 64
   learning_rate: 1e-3
   learning_rate_scheduler: null
