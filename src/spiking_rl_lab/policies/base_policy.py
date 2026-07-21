@@ -6,32 +6,31 @@ import dataclasses
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+import torch
 from gymnasium.spaces.utils import flatdim
 
 from spiking_rl_lab.core.factory import ConfiguredBase
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     import gymnasium
-    import torch
 
     from spiking_rl_lab.policies.distributions import ActionDistribution
 
 
-class BasePolicy(ConfiguredBase, ABC):
-    """Build action distributions from network-produced parameters."""
+class BasePolicy(torch.nn.Module, ConfiguredBase, ABC):
+    """Build action distributions from a policy-network output tensor."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
     class Config:
         """Base policy configuration."""
 
     def __init__(self, cfg: Config, *, action_space: gymnasium.Space) -> None:
-        """Store policy metadata without creating trainable modules."""
-        super().__init__(cfg)
+        """Initialize policy module and action-space metadata."""
+        torch.nn.Module.__init__(self)
+        ConfiguredBase.__init__(self, cfg)
         self.action_space = action_space
         self.num_actions = flatdim(action_space)
 
     @abstractmethod
-    def distribution(self, parameters: Mapping[str, torch.Tensor]) -> ActionDistribution:
-        """Build an action distribution from network-produced parameters."""
+    def distribution(self, features: torch.Tensor) -> ActionDistribution:
+        """Build an action distribution from a policy-network output tensor."""

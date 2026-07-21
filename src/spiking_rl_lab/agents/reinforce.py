@@ -136,30 +136,35 @@ def _flatten_observations(observations: torch.Tensor) -> torch.Tensor:
     return observations.view(observations.shape[0], -1)
 
 
-def _broadcast_network(network: NodeNetwork) -> None:
-    """Broadcast one network state in distributed training."""
-    state = [network.state_dict()]
-    torch.distributed.broadcast_object_list(state, 0)
-    network.load_state_dict(state[0])
+def _broadcast_modules(*modules: torch.nn.Module) -> None:
+    """Broadcast module states in distributed training."""
+    for module in modules:
+        state = [module.state_dict()]
+        torch.distributed.broadcast_object_list(state, 0)
+        module.load_state_dict(state[0])
 
 
-def _reduce_network_gradients(network: NodeNetwork) -> None:
-    """Average network gradients across distributed workers."""
+def _reduce_module_gradients(*modules: torch.nn.Module) -> None:
+    """Average module gradients across distributed workers."""
     gradients = [
-        parameter.grad.view(-1) for parameter in network.parameters() if parameter.grad is not None
+        parameter.grad.view(-1)
+        for module in modules
+        for parameter in module.parameters()
+        if parameter.grad is not None
     ]
     if not gradients:
         return
     flattened = torch.cat(gradients)
     torch.distributed.all_reduce(flattened, op=torch.distributed.ReduceOp.SUM)
     offset = 0
-    for parameter in network.parameters():
-        if parameter.grad is not None:
-            parameter.grad.copy_(
-                flattened[offset : offset + parameter.numel()].view_as(parameter.grad)
-                / config.torch.world_size
-            )
-            offset += parameter.numel()
+    for module in modules:
+        for parameter in module.parameters():
+            if parameter.grad is not None:
+                parameter.grad.copy_(
+                    flattened[offset : offset + parameter.numel()].view_as(parameter.grad)
+                    / config.torch.world_size
+                )
+                offset += parameter.numel()
 
 
 def _detach_hidden_states[StateT](hidden_states: StateT) -> StateT:
@@ -223,11 +228,18 @@ class Reinforce(BaseAgent):
         super().__init__(cfg, env=env)
 
         self.policy_network = policy_network
-        self.policy = policy
+        self.policy = policy.to(cfg.device)
         self.checkpoint_modules["policy_network"] = self.policy_network
+        self.checkpoint_modules["policy"] = self.policy
+        self._trainable_parameters = tuple(
+            parameter
+            for module in (self.policy_network, self.policy)
+            for parameter in module.parameters()
+            if parameter.requires_grad
+        )
 
         if config.torch.is_distributed:
-            _broadcast_network(self.policy_network)
+            _broadcast_modules(self.policy_network, self.policy)
 
         self._device_type = torch.device(self.device).type
         self.scaler = torch.amp.GradScaler(
@@ -236,7 +248,7 @@ class Reinforce(BaseAgent):
         )
 
         self.optimizer = torch.optim.Adamax(
-            self.policy_network.parameters(),
+            self._trainable_parameters,
             lr=self.cfg.learning_rate,
         )
         self.checkpoint_modules["optimizer"] = self.optimizer
@@ -280,6 +292,7 @@ class Reinforce(BaseAgent):
         """Initialize the agent."""
         super().init(trainer_cfg=trainer_cfg)
         self.policy_network.eval()
+        self.policy.eval()
 
         self.memory.create_tensor(
             name="observations",
@@ -324,11 +337,11 @@ class Reinforce(BaseAgent):
             return actions, {}
 
         with torch.autocast(device_type=self._device_type, enabled=self.cfg.mixed_precision):
-            logits, hidden_states = self.policy_network(
+            features, hidden_states = self.policy_network(
                 _flatten_observations(inputs["observations"]),
                 inputs.get("hidden_states"),
             )
-            distribution = self.policy.distribution({"logits": logits})
+            distribution = self.policy.distribution(features)
             actions = distribution.sample() if self.training else distribution.mode()
             log_prob = distribution.log_prob(actions) if self.training else None
 
@@ -396,8 +409,10 @@ class Reinforce(BaseAgent):
             if not self._rollout % self.cfg.rollouts:
                 started_at = time.perf_counter()
                 self.policy_network.train()
+                self.policy.train()
                 self.update(timestep=timestep, timesteps=timesteps)
                 self.policy_network.eval()
+                self.policy.eval()
                 elapsed_time_ms = (time.perf_counter() - started_at) * 1_000
                 self.track_data("Stats / Algorithm update time (ms)", elapsed_time_ms)
 
@@ -444,8 +459,8 @@ class Reinforce(BaseAgent):
         """Update the policy on a single mini-batch."""
         with torch.autocast(device_type=self._device_type, enabled=self.cfg.mixed_precision):
             observations = self._observation_preprocessor(sampled_observations, train=True)
-            logits, _ = self.policy_network(_flatten_observations(observations))
-            distribution = self.policy.distribution({"logits": logits})
+            features, _ = self.policy_network(_flatten_observations(observations))
+            distribution = self.policy.distribution(features)
             log_prob = distribution.log_prob(sampled_actions)
 
             policy_loss = -(sampled_returns * log_prob).mean()
@@ -458,12 +473,12 @@ class Reinforce(BaseAgent):
         self.scaler.scale(policy_loss + entropy_loss).backward()
 
         if config.torch.is_distributed:
-            _reduce_network_gradients(self.policy_network)
+            _reduce_module_gradients(self.policy_network, self.policy)
 
         if self.cfg.grad_norm_clip > 0:
             self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(
-                self.policy_network.parameters(),
+                self._trainable_parameters,
                 self.cfg.grad_norm_clip,
             )
 

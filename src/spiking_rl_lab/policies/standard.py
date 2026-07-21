@@ -13,39 +13,7 @@ from spiking_rl_lab.policies.builder import register_policy
 from spiking_rl_lab.policies.distributions import ActionDistribution
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     import gymnasium
-
-
-def _parameter(parameters: Mapping[str, torch.Tensor], name: str) -> torch.Tensor:
-    """Get a required distribution parameter with a clear error."""
-    try:
-        return parameters[name]
-    except KeyError as exc:
-        msg = f"Policy parameters must contain '{name}'"
-        raise KeyError(msg) from exc
-
-
-def _action_bounds(
-    action_space: Box,
-    *,
-    device: torch.device,
-    dtype: torch.dtype,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return Box bounds as tensors on the specified device and dtype."""
-    return (
-        torch.as_tensor(
-            action_space.low,
-            device=device,
-            dtype=dtype,
-        ),
-        torch.as_tensor(
-            action_space.high,
-            device=device,
-            dtype=dtype,
-        ),
-    )
 
 
 def _require_discrete_action_space(action_space: gymnasium.Space) -> Discrete:
@@ -62,6 +30,16 @@ def _require_box_action_space(action_space: gymnasium.Space) -> Box:
         msg = "Continuous policy requires a Box action space"
         raise TypeError(msg)
     return action_space
+
+
+def _clip_to_action_bounds(
+    actions: torch.Tensor,
+    *,
+    low: torch.Tensor,
+    high: torch.Tensor,
+) -> torch.Tensor:
+    """Clip actions using bounds already stored by the policy module."""
+    return actions.clamp(low.to(dtype=actions.dtype), high.to(dtype=actions.dtype))
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -164,12 +142,9 @@ class CategoricalPolicy(BasePolicy):
         _require_discrete_action_space(action_space)
         super().__init__(cfg, action_space=action_space)
 
-    def distribution(
-        self,
-        parameters: Mapping[str, torch.Tensor],
-    ) -> ActionDistribution:
+    def distribution(self, features: torch.Tensor) -> ActionDistribution:
         """Build a categorical action distribution from unnormalised logits."""
-        logits = _parameter(parameters, "logits")
+        logits = features
         if logits.shape[-1] != self.num_actions:
             msg = (
                 f"Categorical logits must have {self.num_actions} features, got {logits.shape[-1]}"
@@ -180,7 +155,7 @@ class CategoricalPolicy(BasePolicy):
 
 @register_policy("gaussian")
 class GaussianPolicy(BasePolicy):
-    """Gaussian policy consuming explicit mean and log-standard-deviation tensors."""
+    """Gaussian policy with a learned, state-independent log standard deviation."""
 
     @dataclasses.dataclass(kw_only=True, slots=True)
     class Config(BasePolicy.Config):
@@ -190,35 +165,39 @@ class GaussianPolicy(BasePolicy):
         clip_log_std: bool = True
         min_log_std: float = -20
         max_log_std: float = 2
+        initial_log_std: float = 0.0
         reduction: Literal["mean", "sum"] = "sum"
 
     def __init__(self, cfg: Config, *, action_space: gymnasium.Space) -> None:
         """Initialize a Gaussian policy for a continuous action space."""
         self._action_space = _require_box_action_space(action_space)
         super().__init__(cfg, action_space=action_space)
+        self.log_std = torch.nn.Parameter(torch.full((self.num_actions,), cfg.initial_log_std))
+        self.register_buffer(
+            "_action_low", torch.as_tensor(self._action_space.low), persistent=False
+        )
+        self.register_buffer(
+            "_action_high", torch.as_tensor(self._action_space.high), persistent=False
+        )
 
-    def distribution(self, parameters: Mapping[str, torch.Tensor]) -> ActionDistribution:
+    def distribution(self, features: torch.Tensor) -> ActionDistribution:
         """Build a normal action distribution from network outputs."""
-        mean_actions = _parameter(parameters, "mean_actions")
-        log_std = _parameter(parameters, "log_std")
+        mean_actions = features
         if mean_actions.shape[-1] != self.num_actions:
             msg = (
                 f"Gaussian means must have {self.num_actions} features, "
                 f"got {mean_actions.shape[-1]}"
             )
             raise ValueError(msg)
-        if log_std.shape != mean_actions.shape:
-            msg = "Gaussian log_std must have the same shape as mean_actions"
-            raise ValueError(msg)
+        log_std = self.log_std.expand_as(mean_actions)
         if self._cfg.clip_log_std:
             log_std = log_std.clamp(self._cfg.min_log_std, self._cfg.max_log_std)
         if self._cfg.clip_mean_actions:
-            bounds = _action_bounds(
-                self._action_space,
-                device=mean_actions.device,
-                dtype=mean_actions.dtype,
+            mean_actions = _clip_to_action_bounds(
+                mean_actions,
+                low=self._action_low,
+                high=self._action_high,
             )
-            mean_actions = mean_actions.clamp(*bounds)
         return _GaussianDistribution(
             distribution=torch.distributions.Normal(mean_actions, log_std.exp()),
             reduction=self._cfg.reduction,
@@ -239,13 +218,15 @@ class DeterministicPolicy(BasePolicy):
         """Initialize a deterministic policy for a continuous action space."""
         self._action_space = _require_box_action_space(action_space)
         super().__init__(cfg, action_space=action_space)
+        self.register_buffer(
+            "_action_low", torch.as_tensor(self._action_space.low), persistent=False
+        )
+        self.register_buffer(
+            "_action_high", torch.as_tensor(self._action_space.high), persistent=False
+        )
 
-    def _actions(
-        self,
-        parameters: Mapping[str, torch.Tensor],
-        action_space: Box,
-    ) -> torch.Tensor:
-        actions = _parameter(parameters, "actions")
+    def _actions(self, features: torch.Tensor) -> torch.Tensor:
+        actions = features
         if actions.shape[-1] != self.num_actions:
             msg = (
                 f"Deterministic actions must have {self.num_actions} features, "
@@ -253,14 +234,13 @@ class DeterministicPolicy(BasePolicy):
             )
             raise ValueError(msg)
         if self._cfg.clip_actions:
-            bounds = _action_bounds(
-                action_space,
-                device=actions.device,
-                dtype=actions.dtype,
+            actions = _clip_to_action_bounds(
+                actions,
+                low=self._action_low,
+                high=self._action_high,
             )
-            actions = actions.clamp(*bounds)
         return actions
 
-    def distribution(self, parameters: Mapping[str, torch.Tensor]) -> ActionDistribution:
+    def distribution(self, features: torch.Tensor) -> ActionDistribution:
         """Build a deterministic action distribution from network outputs."""
-        return _DeterministicDistribution(self._actions(parameters, self._action_space))
+        return _DeterministicDistribution(self._actions(features))
