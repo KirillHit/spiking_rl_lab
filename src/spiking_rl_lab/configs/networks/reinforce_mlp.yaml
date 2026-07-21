@@ -2,15 +2,21 @@ nodes:
   - name: linear
     params:
       out_features: 64
-  - name: lif
+  - name: torch_activation
+    params:
+      activation: relu
   - name: linear
     params:
       out_features: 128
-  - name: lif
+  - name: torch_activation
+    params:
+      activation: relu
   - name: linear
     params:
       out_features: 64
-  - name: li
+  - name: torch_activation
+    params:
+      activation: relu
   - name: linear
     params:
       out_features: 2

@@ -7,6 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
+from gymnasium.spaces import Discrete
 from gymnasium.spaces.utils import flatdim
 from omegaconf import MISSING
 from skrl import config
@@ -48,10 +49,10 @@ class ReinforceConfig(BaseAgent.Config):
     """Policy adapter that interprets network outputs."""
 
     rollouts: int = 16
-    """Number of environment steps collected before each policy update."""
+    """Number of policy transitions collected before each update."""
 
-    mini_batches: int = 1
-    """Number of mini-batches used to split one rollout during optimization."""
+    sequence_length: int = 16
+    """Maximum number of transitions in one truncated-BPTT window."""
 
     discount_factor: float = 0.99
     """Reward discount factor used to compute Monte Carlo returns."""
@@ -71,12 +72,6 @@ class ReinforceConfig(BaseAgent.Config):
     observation_preprocessor_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
     """Keyword arguments passed to ``observation_preprocessor`` during construction."""
 
-    state_preprocessor: str | type[Any] | None = None
-    """Optional state preprocessor class or dotted import path."""
-
-    state_preprocessor_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
-    """Keyword arguments passed to ``state_preprocessor`` during construction."""
-
     random_timesteps: int = 0
     """Number of initial timesteps that use random actions instead of the policy."""
 
@@ -90,10 +85,10 @@ class ReinforceConfig(BaseAgent.Config):
     """Optional reward-shaping callable or dotted import path."""
 
     normalize_returns: bool = True
-    """Whether to normalize returns across the collected rollout before optimization."""
+    """Whether to normalize returns across the collected rollout."""
 
     mixed_precision: bool = False
-    """Whether to enable automatic mixed precision during forward and backward passes."""
+    """Whether to enable automatic mixed precision during optimization."""
 
     def __post_init__(self) -> None:
         """Validate REINFORCE hyperparameters after dataclass initialization."""
@@ -102,7 +97,7 @@ class ReinforceConfig(BaseAgent.Config):
         if not isinstance(self.policy, PolicyConfig):
             self.policy = PolicyConfig(**self.policy)
         require_minimum("rollouts", self.rollouts, minimum=1)
-        require_minimum("mini_batches", self.mini_batches, minimum=1)
+        require_minimum("sequence_length", self.sequence_length, minimum=1)
         require_range("discount_factor", self.discount_factor, minimum=0.0, maximum=1.0)
         require_positive("learning_rate", self.learning_rate)
         require_minimum("random_timesteps", self.random_timesteps, minimum=0)
@@ -116,24 +111,41 @@ class ReinforceConfig(BaseAgent.Config):
             "observation_preprocessor",
             self.observation_preprocessor,
         )
-        self.state_preprocessor = require_optional_class(
-            "state_preprocessor",
-            self.state_preprocessor,
-        )
-        self.rewards_shaper = require_optional_callable(
-            "rewards_shaper",
-            self.rewards_shaper,
-        )
-
-
-def _dense_observation_shape(observation_space: object) -> DenseTensorShape:
-    """Return the dense shape consumed by REINFORCE policy networks."""
-    return TensorShape.dense(flatdim(observation_space))
+        self.rewards_shaper = require_optional_callable("rewards_shaper", self.rewards_shaper)
 
 
 def _flatten_observations(observations: torch.Tensor) -> torch.Tensor:
     """Flatten observations to the dense network input shape."""
-    return observations.view(observations.shape[0], -1)
+    return observations.reshape(observations.shape[0], -1)
+
+
+def _detach_state[StateT](state: StateT) -> StateT:
+    """Detach a nested network state at a truncated-BPTT boundary."""
+    if isinstance(state, torch.Tensor):
+        return state.detach()
+    if isinstance(state, list):
+        return [_detach_state(item) for item in state]
+    if isinstance(state, tuple):
+        values = tuple(_detach_state(item) for item in state)
+        return type(state)(*values) if hasattr(state, "_fields") else values
+    if isinstance(state, dict):
+        return {key: _detach_state(value) for key, value in state.items()}
+    return state
+
+
+def _reset_finished_state[StateT](state: StateT, dones: torch.Tensor) -> StateT:
+    """Reset state rows for environments whose episode has ended."""
+    if isinstance(state, torch.Tensor):
+        mask = (~dones.reshape(-1)).to(device=state.device, dtype=state.dtype)
+        return state * mask.reshape(-1, *([1] * (state.ndim - 1)))
+    if isinstance(state, list):
+        return [_reset_finished_state(item, dones) for item in state]
+    if isinstance(state, tuple):
+        values = tuple(_reset_finished_state(item, dones) for item in state)
+        return type(state)(*values) if hasattr(state, "_fields") else values
+    if isinstance(state, dict):
+        return {key: _reset_finished_state(value, dones) for key, value in state.items()}
+    return state
 
 
 def _broadcast_modules(*modules: torch.nn.Module) -> None:
@@ -144,71 +156,48 @@ def _broadcast_modules(*modules: torch.nn.Module) -> None:
         module.load_state_dict(state[0])
 
 
-def _reduce_module_gradients(*modules: torch.nn.Module) -> None:
-    """Average module gradients across distributed workers."""
+def _reduce_gradients(parameters: tuple[torch.nn.Parameter, ...]) -> None:
+    """Average parameter gradients across distributed workers."""
     gradients = [
-        parameter.grad.view(-1)
-        for module in modules
-        for parameter in module.parameters()
-        if parameter.grad is not None
+        parameter.grad.reshape(-1) for parameter in parameters if parameter.grad is not None
     ]
     if not gradients:
         return
+
     flattened = torch.cat(gradients)
     torch.distributed.all_reduce(flattened, op=torch.distributed.ReduceOp.SUM)
     offset = 0
-    for module in modules:
-        for parameter in module.parameters():
-            if parameter.grad is not None:
-                parameter.grad.copy_(
-                    flattened[offset : offset + parameter.numel()].view_as(parameter.grad)
-                    / config.torch.world_size
-                )
-                offset += parameter.numel()
-
-
-def _detach_hidden_states[StateT](hidden_states: StateT) -> StateT:
-    """Detach tensors in a nested hidden-state structure."""
-    if isinstance(hidden_states, torch.Tensor):
-        return hidden_states.detach()
-    if isinstance(hidden_states, list):
-        return [_detach_hidden_states(item) for item in hidden_states]
-    if isinstance(hidden_states, tuple):
-        values = tuple(_detach_hidden_states(item) for item in hidden_states)
-        if hasattr(hidden_states, "_fields"):
-            return type(hidden_states)(*values)
-        return values
-    if isinstance(hidden_states, dict):
-        return {key: _detach_hidden_states(value) for key, value in hidden_states.items()}
-    return hidden_states
+    for parameter in parameters:
+        if parameter.grad is None:
+            continue
+        size = parameter.numel()
+        parameter.grad.copy_(
+            flattened[offset : offset + size].reshape_as(parameter.grad) / config.torch.world_size
+        )
+        offset += size
 
 
 @register_agent("reinforce")
 class Reinforce(BaseAgent):
-    """REINFORCE agent implementation."""
+    """Monte Carlo policy-gradient agent with truncated BPTT for stateful networks."""
 
     Config: ClassVar[type[ReinforceConfig]] = ReinforceConfig
 
-    def build_memory(self, *, env: Wrapper) -> Memory | None:
-        """Build rollout memory sized for at least one REINFORCE update window."""
+    def build_memory(self, *, env: Wrapper) -> Memory:
+        """Build storage for one policy rollout."""
         return RandomMemory(
             memory_size=self.cfg.rollouts,
             num_envs=env.num_envs,
             device=self.device,
         )
 
-    def __init__(
-        self,
-        cfg: ReinforceConfig,
-        *,
-        env: Wrapper,
-    ) -> None:
-        """REINFORCE agent implementation."""
+    def __init__(self, cfg: ReinforceConfig, *, env: Wrapper) -> None:
+        """Build the policy network, policy adapter, and optimizer."""
         self.cfg: ReinforceConfig
         try:
             policy_network = NodeNetwork(
                 cfg.policy_network,
-                input_shape=_dense_observation_shape(env.observation_space),
+                input_shape=TensorShape.dense(flatdim(env.observation_space)),
             ).to(cfg.device)
             require_shape_fields(
                 "REINFORCE policy network output",
@@ -216,7 +205,7 @@ class Reinforce(BaseAgent):
                 shape_type=DenseTensorShape,
                 fields={"features": flatdim(env.action_space)},
             )
-            policy = build_policy(cfg.policy, action_space=env.action_space)
+            policy = build_policy(cfg.policy, action_space=env.action_space).to(cfg.device)
         except Exception as exc:
             msg = "Failed to create REINFORCE policy components"
             raise AgentCreationError(msg) from exc
@@ -228,87 +217,66 @@ class Reinforce(BaseAgent):
         super().__init__(cfg, env=env)
 
         self.policy_network = policy_network
-        self.policy = policy.to(cfg.device)
-        self.checkpoint_modules["policy_network"] = self.policy_network
-        self.checkpoint_modules["policy"] = self.policy
-        self._trainable_parameters = tuple(
+        self.policy = policy
+        self.checkpoint_modules.update(policy_network=policy_network, policy=policy)
+        self._parameters = tuple(
             parameter
-            for module in (self.policy_network, self.policy)
+            for module in (policy_network, policy)
             for parameter in module.parameters()
             if parameter.requires_grad
         )
 
         if config.torch.is_distributed:
-            _broadcast_modules(self.policy_network, self.policy)
+            _broadcast_modules(policy_network, policy)
 
-        self._device_type = torch.device(self.device).type
-        self.scaler = torch.amp.GradScaler(
-            device=self._device_type,
-            enabled=self.cfg.mixed_precision,
-        )
-
-        self.optimizer = torch.optim.Adamax(
-            self._trainable_parameters,
-            lr=self.cfg.learning_rate,
-        )
+        self.optimizer = torch.optim.Adamax(self._parameters, lr=cfg.learning_rate)
         self.checkpoint_modules["optimizer"] = self.optimizer
-
         self.scheduler = None
-        scheduler_cls = self.cfg.learning_rate_scheduler
-        if scheduler_cls is not None:
-            self.scheduler = scheduler_cls(
+        if cfg.learning_rate_scheduler is not None:
+            self.scheduler = cfg.learning_rate_scheduler(
                 self.optimizer,
-                **self.cfg.learning_rate_scheduler_kwargs,
+                **cfg.learning_rate_scheduler_kwargs,
             )
             self.checkpoint_modules["scheduler"] = self.scheduler
 
-        if self.cfg.observation_preprocessor:
-            observation_preprocessor_kwargs = dict(self.cfg.observation_preprocessor_kwargs)
-            observation_preprocessor_kwargs.setdefault("size", self.observation_space)
-            observation_preprocessor_kwargs.setdefault("device", self.device)
-            self._observation_preprocessor = self.cfg.observation_preprocessor(
-                **observation_preprocessor_kwargs,
-            )
-            self.checkpoint_modules["observation_preprocessor"] = self._observation_preprocessor
-        else:
+        if cfg.observation_preprocessor is None:
             self._observation_preprocessor = self._empty_preprocessor
-
-        if self.cfg.state_preprocessor:
-            state_preprocessor_kwargs = dict(self.cfg.state_preprocessor_kwargs)
-            state_preprocessor_kwargs.setdefault("size", self.state_space)
-            state_preprocessor_kwargs.setdefault("device", self.device)
-            self._state_preprocessor = self.cfg.state_preprocessor(
-                **state_preprocessor_kwargs,
-            )
-            self.checkpoint_modules["state_preprocessor"] = self._state_preprocessor
         else:
-            self._state_preprocessor = self._empty_preprocessor
+            kwargs = dict(cfg.observation_preprocessor_kwargs)
+            kwargs.setdefault("size", self.observation_space)
+            kwargs.setdefault("device", self.device)
+            self._observation_preprocessor = cfg.observation_preprocessor(**kwargs)
+            self.checkpoint_modules["observation_preprocessor"] = self._observation_preprocessor
 
-        self._current_log_prob: torch.Tensor | None = None
+        self._device_type = torch.device(self.device).type
+        self.scaler = torch.amp.GradScaler(device=self._device_type, enabled=cfg.mixed_precision)
         self._hidden_states: ListState | None = None
-        self._rollout = 0
+        self._rollout_initial_state: ListState | None = None
+        self._current_inputs: torch.Tensor | None = None
 
     def init(self, *, trainer_cfg: dict[str, Any] | None = None) -> None:
-        """Initialize the agent."""
+        """Initialize rollout storage and keep policy modules deterministic for replay."""
         super().init(trainer_cfg=trainer_cfg)
         self.policy_network.eval()
         self.policy.eval()
 
         self.memory.create_tensor(
             name="observations",
-            size=self.observation_space,
+            size=flatdim(self.observation_space),
             dtype=torch.float32,
         )
-        self.memory.create_tensor(name="states", size=self.state_space, dtype=torch.float32)
-        self.memory.create_tensor(name="actions", size=self.action_space, dtype=torch.float32)
+        action_dtype = torch.int64 if isinstance(self.action_space, Discrete) else torch.float32
+        self.memory.create_tensor(name="actions", size=self.action_space, dtype=action_dtype)
         self.memory.create_tensor(name="rewards", size=1, dtype=torch.float32)
         self.memory.create_tensor(name="dones", size=1, dtype=torch.bool)
-        self.memory.create_tensor(name="returns", size=1, dtype=torch.float32)
-        self.memory.create_tensor(name="log_prob", size=1, dtype=torch.float32)
-
-        self._tensors_names = ["observations", "states", "actions", "returns", "log_prob"]
-        self.memory.reset()
         self._hidden_states = None
+        self._reset_rollout()
+
+    def _reset_rollout(self) -> None:
+        """Clear rollout storage without resetting the live network state."""
+        self.memory.reset()
+        self._rollout_initial_state = None
+        self._current_inputs = None
 
     def act(
         self,
@@ -318,40 +286,36 @@ class Reinforce(BaseAgent):
         timestep: int,
         timesteps: int,
     ) -> tuple[torch.Tensor, dict[str, Any]]:
-        """Sample actions from the policy."""
-        inputs = {
-            "observations": self._observation_preprocessor(observations),
-            "states": self._state_preprocessor(states),
-        }
-        if self._hidden_states is not None:
-            inputs["hidden_states"] = self._hidden_states
+        """Sample an action and advance the policy-network state."""
+        del states, timesteps
+        self._current_inputs = None
 
         if self.training and timestep < self.cfg.random_timesteps:
-            self._current_log_prob = None
             actions = torch.as_tensor(
                 [self.action_space.sample() for _ in range(observations.shape[0])],
                 device=self.device,
             )
-            if actions.ndim == 1:
-                actions = actions.unsqueeze(-1)
-            return actions, {}
+            return (actions.unsqueeze(-1) if actions.ndim == 1 else actions), {}
 
-        with torch.autocast(device_type=self._device_type, enabled=self.cfg.mixed_precision):
-            features, hidden_states = self.policy_network(
-                _flatten_observations(inputs["observations"]),
-                inputs.get("hidden_states"),
-            )
+        processed = self._observation_preprocessor(observations, train=self.training)
+        inputs = _flatten_observations(processed)
+        if self.training and self._rollout_initial_state is None:
+            self._rollout_initial_state = self._hidden_states
+
+        with (
+            torch.no_grad(),
+            torch.autocast(
+                device_type=self._device_type,
+                enabled=self.cfg.mixed_precision,
+            ),
+        ):
+            features, self._hidden_states = self.policy_network(inputs, self._hidden_states)
             distribution = self.policy.distribution(features)
             actions = distribution.sample() if self.training else distribution.mode()
-            log_prob = distribution.log_prob(actions) if self.training else None
 
-        self._hidden_states = _detach_hidden_states(hidden_states)
-        if not self.training:
-            self._current_log_prob = None
-            return actions, {}
-
-        self._current_log_prob = log_prob
-        return actions, {"log_prob": log_prob}
+        if self.training:
+            self._current_inputs = inputs
+        return actions, {}
 
     def record_transition(
         self,
@@ -368,7 +332,7 @@ class Reinforce(BaseAgent):
         timestep: int,
         timesteps: int,
     ) -> None:
-        """Record environment transitions in rollout memory."""
+        """Track the interaction, reset done states, and store policy transitions."""
         super().record_transition(
             observations=observations,
             states=states,
@@ -383,149 +347,111 @@ class Reinforce(BaseAgent):
             timesteps=timesteps,
         )
 
-        if not self.training or self._current_log_prob is None:
+        dones = torch.logical_or(terminated, truncated)
+        self._hidden_states = _reset_finished_state(self._hidden_states, dones)
+        if not self.training or self._current_inputs is None:
             return
 
         if self.cfg.rewards_shaper is not None:
             rewards = self.cfg.rewards_shaper(rewards, timestep, timesteps)
-
-        dones = torch.logical_or(terminated, truncated)
         self.memory.add_samples(
-            observations=observations,
-            states=states,
+            observations=self._current_inputs,
             actions=actions,
             rewards=rewards,
             dones=dones,
-            log_prob=self._current_log_prob,
         )
+        self._current_inputs = None
 
     def pre_interaction(self, *, timestep: int, timesteps: int) -> None:
-        """Run the hook before the environment interaction."""
+        """Run the hook before environment interaction."""
 
     def post_interaction(self, *, timestep: int, timesteps: int) -> None:
-        """Trigger policy updates after rollout collection."""
-        if self.training:
-            self._rollout += 1
-            if not self._rollout % self.cfg.rollouts:
-                started_at = time.perf_counter()
-                self.policy_network.train()
-                self.policy.train()
-                self.update(timestep=timestep, timesteps=timesteps)
-                self.policy_network.eval()
-                self.policy.eval()
-                elapsed_time_ms = (time.perf_counter() - started_at) * 1_000
-                self.track_data("Stats / Algorithm update time (ms)", elapsed_time_ms)
-
+        """Update the policy as soon as the rollout storage is full."""
+        if self.training and self.memory.filled:
+            started_at = time.perf_counter()
+            self.update(timestep=timestep, timesteps=timesteps)
+            self.track_data(
+                "Stats / Algorithm update time (ms)",
+                (time.perf_counter() - started_at) * 1_000,
+            )
         super().post_interaction(timestep=timestep, timesteps=timesteps)
 
-    def _compute_discounted_returns(self, rollout_steps: int) -> torch.Tensor:
-        """Compute discounted returns for the current rollout."""
+    def _discounted_returns(self, rollout_steps: int) -> torch.Tensor:
+        """Compute normalized Monte Carlo returns for the stored rollout."""
         rewards = self.memory.get_tensor_by_name("rewards")[:rollout_steps]
         dones = self.memory.get_tensor_by_name("dones")[:rollout_steps]
         returns = torch.zeros_like(rewards)
+        future_return = torch.zeros((self.memory.num_envs, 1), device=self.device)
 
-        discounted_return = torch.zeros((self.memory.num_envs, 1), device=self.device)
         for step in range(rollout_steps - 1, -1, -1):
-            discounted_return = rewards[step] + (
-                self.cfg.discount_factor * discounted_return * (~dones[step]).float()
+            future_return = rewards[step] + (
+                self.cfg.discount_factor * future_return * (~dones[step]).float()
             )
-            returns[step] = discounted_return
+            returns[step] = future_return
 
-        if not self.cfg.normalize_returns:
-            return returns
+        if self.cfg.normalize_returns:
+            returns = (returns - returns.mean()) / returns.std(correction=0).clamp_min(1e-8)
+        return returns
 
-        flat_returns = returns.view(-1, 1)
-        flat_returns = (flat_returns - flat_returns.mean()) / flat_returns.std().clamp_min(1e-8)
-        return flat_returns.view_as(returns)
+    def _loss(self, rollout_steps: int, returns: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Replay the rollout sequentially and compute its truncated-BPTT loss."""
+        observations = self.memory.get_tensor_by_name("observations")
+        actions = self.memory.get_tensor_by_name("actions")
+        dones = self.memory.get_tensor_by_name("dones")
+        policy_terms = []
+        entropy_terms = []
 
-    def _sample_rollout_batches(self, rollout_steps: int) -> list[list[torch.Tensor]]:
-        """Sample mini-batches from the current rollout."""
-        num_samples = rollout_steps * self.memory.num_envs
-        batch_count = max(1, min(self.cfg.mini_batches, num_samples))
-        indexes = torch.randperm(num_samples, device=self.device)
-        return self.memory.sample_by_index(
-            names=self._tensors_names,
-            indexes=indexes,
-            mini_batches=batch_count,
-        )
-
-    def _update_policy_batch(
-        self,
-        sampled_observations: torch.Tensor,
-        sampled_states: torch.Tensor | None,
-        sampled_actions: torch.Tensor,
-        sampled_returns: torch.Tensor,
-    ) -> tuple[float, float]:
-        """Update the policy on a single mini-batch."""
         with torch.autocast(device_type=self._device_type, enabled=self.cfg.mixed_precision):
-            observations = self._observation_preprocessor(sampled_observations, train=True)
-            features, _ = self.policy_network(_flatten_observations(observations))
-            distribution = self.policy.distribution(features)
-            log_prob = distribution.log_prob(sampled_actions)
+            hidden_states = self._rollout_initial_state
+            for step in range(rollout_steps):
+                features, hidden_states = self.policy_network(observations[step], hidden_states)
+                distribution = self.policy.distribution(features)
+                log_prob = distribution.log_prob(actions[step])
+                policy_terms.append(-(returns[step] * log_prob).mean())
+                if self.cfg.entropy_loss_scale:
+                    entropy_terms.append(
+                        -self.cfg.entropy_loss_scale * distribution.entropy().mean()
+                    )
+                hidden_states = _reset_finished_state(hidden_states, dones[step])
+                if (step + 1) % self.cfg.sequence_length == 0:
+                    hidden_states = _detach_state(hidden_states)
 
-            policy_loss = -(sampled_returns * log_prob).mean()
-            if self.cfg.entropy_loss_scale:
-                entropy_loss = -self.cfg.entropy_loss_scale * distribution.entropy().mean()
-            else:
-                entropy_loss = torch.zeros((), device=self.device)
+            policy_loss = torch.stack(policy_terms).mean()
+            entropy_loss = (
+                torch.stack(entropy_terms).mean()
+                if entropy_terms
+                else torch.zeros((), device=self.device)
+            )
+        return policy_loss, entropy_loss
 
-        self.optimizer.zero_grad()
+    def update(self, *, timestep: int, timesteps: int) -> None:
+        """Run one Monte Carlo policy-gradient update."""
+        del timestep, timesteps
+        rollout_steps = self.memory.memory_size if self.memory.filled else self.memory.memory_index
+        if not rollout_steps:
+            return
+
+        policy_loss, entropy_loss = self._loss(
+            rollout_steps,
+            self._discounted_returns(rollout_steps),
+        )
+        self.optimizer.zero_grad(set_to_none=True)
         self.scaler.scale(policy_loss + entropy_loss).backward()
 
         if config.torch.is_distributed:
-            _reduce_module_gradients(self.policy_network, self.policy)
-
-        if self.cfg.grad_norm_clip > 0:
+            _reduce_gradients(self._parameters)
+        if self.cfg.grad_norm_clip:
             self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(
-                self._trainable_parameters,
-                self.cfg.grad_norm_clip,
-            )
+            torch.nn.utils.clip_grad_norm_(self._parameters, self.cfg.grad_norm_clip)
 
         self.scaler.step(self.optimizer)
         self.scaler.update()
-
-        return policy_loss.item(), entropy_loss.item()
-
-    def update(self, *, timestep: int, timesteps: int) -> None:
-        """Run one REINFORCE policy update from the current rollout."""
-        del timestep, timesteps
-
-        rollout_steps = self.memory.memory_size if self.memory.filled else self.memory.memory_index
-        if rollout_steps <= 0:
-            return
-
-        returns = self._compute_discounted_returns(rollout_steps)
-        self.memory.get_tensor_by_name("returns")[:rollout_steps].copy_(returns)
-        sampled_batches = self._sample_rollout_batches(rollout_steps)
-
-        cumulative_policy_loss = 0.0
-        cumulative_entropy_loss = 0.0
-
-        for (
-            sampled_observations,
-            sampled_states,
-            sampled_actions,
-            sampled_returns,
-            _sampled_log_prob,
-        ) in sampled_batches:
-            del _sampled_log_prob
-            policy_loss, entropy_loss = self._update_policy_batch(
-                sampled_observations=sampled_observations,
-                sampled_states=sampled_states,
-                sampled_actions=sampled_actions,
-                sampled_returns=sampled_returns,
-            )
-            cumulative_policy_loss += policy_loss
-            cumulative_entropy_loss += entropy_loss
-
         if self.scheduler is not None:
             self.scheduler.step()
 
-        self.track_data("Loss / Policy loss", cumulative_policy_loss / len(sampled_batches))
+        self.track_data("Loss / Policy loss", policy_loss.item())
         if self.cfg.entropy_loss_scale:
-            self.track_data("Loss / Entropy loss", cumulative_entropy_loss / len(sampled_batches))
+            self.track_data("Loss / Entropy loss", entropy_loss.item())
         if self.scheduler is not None:
             self.track_data("Learning / Learning rate", self.scheduler.get_last_lr()[0])
-
-        self.memory.reset()
+        self._reset_rollout()

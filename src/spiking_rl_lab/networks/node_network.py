@@ -65,19 +65,15 @@ class NodeNetwork(nn.Module, ConfiguredBase):
                 nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="relu")
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0)
-            elif isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
-                if module.weight is not None:
-                    nn.init.constant_(module.weight, 1)
-                if module.bias is not None:
-                    nn.init.constant_(module.bias, 0)
 
     def forward(
         self,
         inputs: torch.Tensor,
         state: ListState | None = None,
     ) -> tuple[torch.Tensor, ListState]:
-        """Run the network and return output with per-layer state."""
-        state = [None] * len(self._net) if state is None else state
+        """Run the network without mutating the provided per-layer state."""
+        previous_state = [None] * len(self._net) if state is None else state
+        next_state = [None] * len(self._net)
         for idx, layer in enumerate(self._net):
-            inputs, state[idx] = layer(inputs, state[idx])
-        return inputs, state
+            inputs, next_state[idx] = layer(inputs, previous_state[idx])
+        return inputs, next_state

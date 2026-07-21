@@ -17,7 +17,11 @@ if TYPE_CHECKING:
 
 
 class BaseNode(nn.Module, ConfiguredBase, ABC):
-    """Base class for network nodes."""
+    """Base class for network nodes.
+
+    With identical parameters, inputs, and state, ``forward`` must return identical
+    outputs and next state. It must not mutate its state or module buffers.
+    """
 
     @dataclasses.dataclass(kw_only=True, slots=True)
     class Config:
@@ -50,4 +54,4 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
         inputs: torch.Tensor,
         state: ListState | None = None,
     ) -> tuple[torch.Tensor, ListState]:
-        """Compute the next output and state."""
+        """Compute a deterministic next output and explicit state."""
