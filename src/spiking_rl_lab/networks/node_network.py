@@ -34,7 +34,7 @@ class NodeNetwork(nn.Module, ConfiguredBase):
 
     Config: ClassVar[type[NodeNetworkConfig]] = NodeNetworkConfig
 
-    def __init__(self, cfg: NodeNetworkConfig, input_shape: TensorShape) -> None:
+    def __init__(self, cfg: NodeNetworkConfig, *, input_shape: TensorShape) -> None:
         """Build network nodes from ``cfg.nodes``."""
         nn.Module.__init__(self)
         ConfiguredBase.__init__(self, cfg)

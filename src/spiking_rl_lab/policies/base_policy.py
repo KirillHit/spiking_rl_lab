@@ -26,12 +26,7 @@ class BasePolicy(ConfiguredBase, ABC):
     class Config:
         """Base policy configuration."""
 
-    def __init__(
-        self,
-        cfg: Config,
-        *,
-        action_space: gymnasium.Space,
-    ) -> None:
+    def __init__(self, cfg: Config, *, action_space: gymnasium.Space) -> None:
         """Store policy metadata without creating trainable modules."""
         super().__init__(cfg)
         self.action_space = action_space

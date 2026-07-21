@@ -19,7 +19,7 @@ class BaseEnvBackend(ConfiguredBase, ABC):
     class Config:
         """Base environment backend configuration."""
 
-    def __init__(self, cfg: object) -> None:
+    def __init__(self, cfg: Config) -> None:
         """Store backend configuration."""
         super().__init__(cfg)
 
