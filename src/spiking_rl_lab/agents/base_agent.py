@@ -33,14 +33,13 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
         cfg: Config,
         *,
         env: Wrapper,
-        models: dict[str, object],
     ) -> None:
         """Initialize common tracking state."""
         ConfiguredBase.__init__(self, cfg)
         Agent.__init__(
             self,
             cfg=cfg,
-            models=models,
+            models={},
             memory=None,
             observation_space=env.observation_space,
             state_space=env.state_space,

@@ -48,7 +48,6 @@ def build_env(cfg: EnvironmentConfig) -> Wrapper:
     """Build a skrl-wrapped environment according to the configured backend."""
     log.info("Creating environment using backend '%s'...", cfg.name)
     import_registry_modules(ENV_BACKEND_MODULES, ENV_BACKEND_SPEC)
-
     backend = build_configured_instance(
         cfg,
         spec=ENV_BACKEND_SPEC,

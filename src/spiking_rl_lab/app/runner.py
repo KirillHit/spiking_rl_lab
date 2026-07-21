@@ -123,7 +123,7 @@ class Runner:
         """
         env = build_env(cfg.env)
         try:
-            agent = build_agent(cfg.agent, env)
+            agent = build_agent(cfg.agent, env=env)
             agent.experiment_dir = cfg.runner.output_dir
             self._load_checkpoint_if_configured(
                 agent=agent,

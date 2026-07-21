@@ -44,22 +44,12 @@ def register_policy(name: str) -> Callable[[type[BasePolicy]], type[BasePolicy]]
     return register_in_registry(name, POLICY_SPEC)
 
 
-def build_policy(
-    cfg: PolicyConfig,
-    *,
-    action_space: gymnasium.Space,
-) -> BasePolicy:
+def build_policy(cfg: PolicyConfig, *, action_space: gymnasium.Space) -> BasePolicy:
     """Build one configured policy adapter."""
-    import_registry_modules(POLICY_MODULES, POLICY_SPEC)
     log.info("Creating policy '%s'...", cfg.name)
-    try:
-        return build_configured_instance(
-            cfg,
-            spec=POLICY_SPEC,
-            dependencies={"action_space": action_space},
-        )
-    except PolicyCreationError:
-        raise
-    except Exception as exc:
-        msg = f"Failed to create policy '{cfg.name}'"
-        raise PolicyCreationError(msg) from exc
+    import_registry_modules(POLICY_MODULES, POLICY_SPEC)
+    return build_configured_instance(
+        cfg,
+        spec=POLICY_SPEC,
+        dependencies={"action_space": action_space},
+    )

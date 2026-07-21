@@ -203,7 +203,7 @@ class Reinforce(BaseAgent):
         try:
             policy_network = NodeNetwork(
                 cfg.policy_network,
-                _dense_observation_shape(env.observation_space),
+                input_shape=_dense_observation_shape(env.observation_space),
             ).to(cfg.device)
             require_shape_fields(
                 "REINFORCE policy network output",
@@ -220,11 +220,7 @@ class Reinforce(BaseAgent):
             msg = f"REINFORCE policy must inherit BasePolicy, got {type(policy).__name__}"
             raise AgentCreationError(msg)
 
-        super().__init__(
-            cfg,
-            env=env,
-            models={},
-        )
+        super().__init__(cfg, env=env)
 
         self.policy_network = policy_network
         self.policy = policy

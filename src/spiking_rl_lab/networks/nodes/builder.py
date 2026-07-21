@@ -47,11 +47,11 @@ def register_node(name: str) -> Callable[[type[BaseNode]], type[BaseNode]]:
     return register_in_registry(name, NODE_SPEC)
 
 
-def build_node(node_cfg: NodeConfig, input_shape: TensorShape) -> BaseNode:
+def build_node(cfg: NodeConfig, input_shape: TensorShape) -> BaseNode:
     """Build a registered network node from configuration."""
     import_registry_modules(NODE_MODULES, NODE_SPEC)
     return build_configured_instance(
-        node_cfg,
+        cfg,
         spec=NODE_SPEC,
         dependencies={"input_shape": input_shape},
     )

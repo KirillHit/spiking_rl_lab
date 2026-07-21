@@ -23,7 +23,7 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
     class Config:
         """Base node configuration."""
 
-    def __init__(self, cfg: Config, *, input_shape: TensorShape) -> None:
+    def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
         """Store node configuration."""
         super().__init__()
         ConfiguredBase.__init__(self, cfg)

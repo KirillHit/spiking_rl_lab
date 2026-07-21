@@ -77,7 +77,13 @@ def build_configured_instance[TBase](
         )
         raise spec.error_cls(msg) from exc
 
-    return component_class(component_cfg, **(dependencies or {}))
+    try:
+        return component_class(component_cfg, **(dependencies or {}))
+    except spec.error_cls:
+        raise
+    except Exception as exc:
+        msg = f"Failed to create {spec.kind} '{cfg.name}'"
+        raise spec.error_cls(msg) from exc
 
 
 def register_in_registry[TBase](
