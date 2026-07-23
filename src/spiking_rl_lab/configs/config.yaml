@@ -5,6 +5,7 @@ defaults:
   - optuna: base
   - runner: base
   - trainer: base
+  - experiment: null
   - override hydra/job_logging: colorlog
   - _self_
 

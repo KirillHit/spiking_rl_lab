@@ -34,6 +34,12 @@ Override configuration values from the command line:
 uv run spiking-rl-lab env=pendulum_v1
 ```
 
+Saved experiment configurations are stored in `src/spiking_rl_lab/configs/experiment/`. Launch one by passing its filename (without `.yaml`) as `experiment`:
+
+```bash
+uv run spiking-rl-lab experiment=<experiment_name>
+```
+
 ## Logs and Artifacts
 
 Local run logs and artifacts are written under `runs/`.
