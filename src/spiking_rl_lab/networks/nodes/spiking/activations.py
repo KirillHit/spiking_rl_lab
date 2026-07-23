@@ -7,14 +7,30 @@ from typing import TYPE_CHECKING
 
 import norse.torch as snn
 import torch
-from norse.torch.functional.leaky_integrator import LIParameters
-from norse.torch.functional.lif import LIFParameters
+from norse.torch.functional.leaky_integrator import LIParameters, LIState
+from norse.torch.functional.lif import LIFFeedForwardState, LIFParameters
 
 from spiking_rl_lab.networks.nodes.base_node import BaseNode
 from spiking_rl_lab.networks.nodes.builder import register_node
 
 if TYPE_CHECKING:
-    from spiking_rl_lab.networks.types import ListState, TensorShape
+    from spiking_rl_lab.networks.shape import TensorShape
+    from spiking_rl_lab.networks.state import ListState
+
+
+def _reset_state_rows[StateT: tuple[torch.Tensor, ...]](
+    state: StateT,
+    initial_state: StateT,
+    dones: torch.Tensor,
+) -> StateT:
+    """Replace completed batch rows with the node's initial state."""
+    values = []
+    for value, initial_value in zip(state, initial_state, strict=True):
+        mask = dones.to(device=value.device, dtype=torch.bool).reshape(
+            -1, *([1] * (value.ndim - 1))
+        )
+        values.append(torch.where(mask, initial_value, value))
+    return type(state)(*values)
 
 
 @register_node("lif")
@@ -56,6 +72,18 @@ class LIFNode(BaseNode):
         """Return output shape."""
         return self._input_shape
 
+    def initial_state(self, inputs: torch.Tensor) -> LIFFeedForwardState:
+        """Create the LIF cell's resting state for ``inputs``."""
+        return self._cell.initial_state(inputs)
+
+    def reset_state(
+        self, state: LIFFeedForwardState | None, dones: torch.Tensor
+    ) -> LIFFeedForwardState | None:
+        """Restore completed environments to the LIF resting state."""
+        if state is None:
+            return None
+        return _reset_state_rows(state, self.initial_state(state.i), dones)
+
     def forward(
         self,
         inputs: torch.Tensor,
@@ -96,6 +124,16 @@ class LINode(BaseNode):
     def output_shape(self) -> TensorShape:
         """Return output shape."""
         return self._input_shape
+
+    def initial_state(self, inputs: torch.Tensor) -> LIState:
+        """Create the leaky integrator's resting state for ``inputs``."""
+        return self._cell.initial_state(inputs)
+
+    def reset_state(self, state: LIState | None, dones: torch.Tensor) -> LIState | None:
+        """Restore completed environments to the integrator resting state."""
+        if state is None:
+            return None
+        return _reset_state_rows(state, self.initial_state(state.i), dones)
 
     def forward(
         self,

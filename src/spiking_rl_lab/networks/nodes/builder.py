@@ -18,7 +18,7 @@ from spiking_rl_lab.networks.nodes.base_node import BaseNode
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from spiking_rl_lab.networks.types import TensorShape
+    from spiking_rl_lab.networks.shape import TensorShape
 
 
 NODE_MODULES = (

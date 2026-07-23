@@ -13,7 +13,8 @@ from torch import nn
 from spiking_rl_lab.core.factory import ConfiguredBase
 
 if TYPE_CHECKING:
-    from spiking_rl_lab.networks.types import ListState, TensorShape
+    from spiking_rl_lab.networks.shape import TensorShape
+    from spiking_rl_lab.networks.state import ListState
 
 
 class BaseNode(nn.Module, ConfiguredBase, ABC):
@@ -47,6 +48,25 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
     @abstractmethod
     def output_shape(self) -> TensorShape:
         """Return output shape."""
+
+    def initial_state(self, inputs: torch.Tensor) -> ListState | None:
+        """Create the initial state for a batch of ``inputs``.
+
+        Stateless nodes keep the default ``None`` state. Nodes that retain
+        state must override this method and return their own initial value.
+        """
+        return None
+
+    def reset_state(self, state: ListState | None, dones: torch.Tensor) -> ListState | None:
+        """Reset the state rows selected by ``dones``.
+
+        Stateless nodes keep the default implementation. Stateful nodes must
+        override it so their reset value matches :meth:`initial_state`.
+        """
+        if state is not None:
+            msg = f"{type(self).__name__} must implement reset_state for its state"
+            raise NotImplementedError(msg)
+        return None
 
     @abstractmethod
     def forward(

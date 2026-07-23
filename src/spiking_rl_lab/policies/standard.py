@@ -114,7 +114,6 @@ class _DeterministicDistribution(ActionDistribution):
 
     def log_prob(self, actions: torch.Tensor) -> torch.Tensor:
         """Return zero log-probabilities for deterministic actions."""
-        del actions
         return self._zeros()
 
     def entropy(self) -> torch.Tensor:

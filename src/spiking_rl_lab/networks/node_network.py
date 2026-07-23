@@ -12,7 +12,8 @@ from spiking_rl_lab.core.factory import ConfiguredBase
 from spiking_rl_lab.networks.nodes.builder import NodeConfig, build_node
 
 if TYPE_CHECKING:
-    from spiking_rl_lab.networks.types import ListState, TensorShape
+    from spiking_rl_lab.networks.shape import TensorShape
+    from spiking_rl_lab.networks.state import ListState
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
@@ -65,6 +66,24 @@ class NodeNetwork(nn.Module, ConfiguredBase):
                 nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="relu")
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0)
+
+    def initial_state(self, inputs: torch.Tensor) -> ListState:
+        """Create one initial state per node for a batch of inputs."""
+        state = []
+        for layer in self._net:
+            layer_state = layer.initial_state(inputs)
+            state.append(layer_state)
+            inputs, _ = layer(inputs, layer_state)
+        return state
+
+    def reset_state(self, state: ListState | None, dones: torch.Tensor) -> ListState | None:
+        """Reset state rows for completed environments through their owning nodes."""
+        if state is None:
+            return None
+        return [
+            layer.reset_state(layer_state, dones)
+            for layer, layer_state in zip(self._net, state, strict=True)
+        ]
 
     def forward(
         self,

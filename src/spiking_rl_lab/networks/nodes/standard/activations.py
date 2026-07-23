@@ -12,7 +12,8 @@ from spiking_rl_lab.networks.nodes.base_node import BaseNode
 from spiking_rl_lab.networks.nodes.builder import register_node
 
 if TYPE_CHECKING:
-    from spiking_rl_lab.networks.types import ListState, TensorShape
+    from spiking_rl_lab.networks.shape import TensorShape
+    from spiking_rl_lab.networks.state import ListState
 
 
 @register_node("torch_activation")

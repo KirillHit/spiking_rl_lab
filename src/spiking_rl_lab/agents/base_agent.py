@@ -55,8 +55,6 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
 
     def write_tracking_data(self, timestep: int, timesteps: int) -> None:
         """Flush tracked metrics to MLflow and reset local buffers."""
-        del timesteps
-
         metrics: dict[str, float] = {}
         for key, value in self.tracking_data.items():
             metrics[self._mlflow_key(key)] = self._reduce_tracking_value(key, value)

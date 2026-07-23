@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import Any
 
 import numpy as np
 
 from spiking_rl_lab.core.validation import require_positive
-
-type ListState = list[Any | None | ListState]
 
 
 class TensorShape(ABC):
