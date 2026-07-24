@@ -1,0 +1,3 @@
+[submodule "docs"]
+	path = docs
+	url = https://github.com/KirillHit/spiking_rl_lab.wiki.git

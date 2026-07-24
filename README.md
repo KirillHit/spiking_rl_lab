@@ -17,7 +17,7 @@ Requirements:
 Install the locked environment and launch the default CartPole experiment:
 
 ```bash
-git clone https://github.com/KirillHit/spiking_rl_lab.git
+git clone --recurse-submodules https://github.com/KirillHit/spiking_rl_lab.git
 cd spiking_rl_lab
 uv sync
 uv run spiking-rl-lab
