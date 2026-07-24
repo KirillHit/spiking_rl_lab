@@ -121,6 +121,12 @@ class Conv2dNode(BaseNode):
         """Return output shape."""
         return self._output_shape
 
+    def initialize_parameters(self) -> None:
+        """Initialize the convolution with Kaiming-normal weights."""
+        nn.init.kaiming_normal_(self._layer.weight, mode="fan_out", nonlinearity="relu")
+        if self._layer.bias is not None:
+            nn.init.constant_(self._layer.bias, 0)
+
     def forward(
         self,
         inputs: torch.Tensor,

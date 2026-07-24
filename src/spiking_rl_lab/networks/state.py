@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-type ListState = list[object | None | ListState]
+type ListState = list[object | ListState | None]
 
 
 def detach_state[StateT](state: StateT) -> StateT:

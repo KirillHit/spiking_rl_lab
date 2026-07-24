@@ -20,7 +20,6 @@ if TYPE_CHECKING:
 class NodeNetworkConfig:
     """Configuration for a node-based network."""
 
-    init_weights: bool = True
     nodes: list[NodeConfig] = dataclasses.field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -47,25 +46,17 @@ class NodeNetwork(nn.Module, ConfiguredBase):
             self._net.append(node)
             self._output_shape = node.output_shape
 
-        if self._cfg.init_weights:
-            self._init_weights()
+        self._initialize_parameters()
 
     @property
     def output_shape(self) -> TensorShape:
         """Return network output shape."""
         return self._output_shape
 
-    def _init_weights(self) -> None:
-        """Initialize standard trainable layers."""
-        for module in self.modules():
-            if isinstance(module, nn.Conv2d):
-                nn.init.kaiming_normal_(module.weight, mode="fan_out", nonlinearity="relu")
-                if module.bias is not None:
-                    nn.init.constant_(module.bias, 0)
-            elif isinstance(module, nn.Linear):
-                nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="relu")
-                if module.bias is not None:
-                    nn.init.constant_(module.bias, 0)
+    def _initialize_parameters(self) -> None:
+        """Initialize parameters through each node's own hook."""
+        for node in self._net:
+            node.initialize_parameters()
 
     def initial_state(self, inputs: torch.Tensor) -> ListState:
         """Create one initial state per node for a batch of inputs."""

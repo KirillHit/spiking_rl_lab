@@ -47,6 +47,12 @@ class LinearNode(BaseNode):
         """Return output shape."""
         return self._output_shape
 
+    def initialize_parameters(self) -> None:
+        """Initialize the layer parameters."""
+        nn.init.kaiming_normal_(self._layer.weight, mode="fan_in", nonlinearity="relu")
+        if self._layer.bias is not None:
+            nn.init.constant_(self._layer.bias, 0)
+
     def forward(
         self,
         inputs: torch.Tensor,

@@ -68,6 +68,14 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
             raise NotImplementedError(msg)
         return None
 
+    def initialize_parameters(self) -> None:
+        """Initialize trainable parameters owned by this node.
+
+        Parameter-free nodes retain the default no-op implementation. Nodes with
+        trainable layers should override this hook when they need a deliberate
+        initialization scheme.
+        """
+
     @abstractmethod
     def forward(
         self,

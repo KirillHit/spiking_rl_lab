@@ -1,0 +1,1 @@
+"""Input encoding network nodes."""
