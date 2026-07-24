@@ -1,5 +1,7 @@
 # @package _global_
 # Reproducible REINFORCE baseline with population coding and a stateful LIF layer.
+# CartPole is too simple to demonstrate a LIF benefit: population coding alone can perform better,
+# because its nonlinearity is sufficient to solve the task. Use a harder environment for SNN tests.
 env:
   name: gymnasium
   params:

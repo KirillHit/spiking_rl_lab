@@ -18,10 +18,12 @@ if TYPE_CHECKING:
 
 @register_node("population_code")
 class PopulationCodeNode(BaseNode):
-    """Encode dense scalar features with Gaussian population tuning curves.
+    """Encode dense scalar features with PopSAN-style Gaussian tuning curves.
 
     Inputs must be normalized to approximately zero mean and unit variance,
     typically by a running standardization preprocessor.
+
+    See Tang et al., 2021: https://proceedings.mlr.press/v155/tang21a.html
     """
 
     @dataclasses.dataclass(kw_only=True, slots=True)
