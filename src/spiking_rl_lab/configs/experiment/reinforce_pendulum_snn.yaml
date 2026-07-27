@@ -1,0 +1,65 @@
+# @package _global_
+# REINFORCE Pendulum experiment with an SNN policy and a stateful spike readout.
+env:
+  name: gymnasium
+  params:
+    id: Pendulum-v1
+    n_envs: 16
+    render: false
+
+agent:
+  name: reinforce
+  params:
+    policy_network:
+      nodes:
+        - name: population_code
+          params:
+            neurons_per_feature: 16
+            sigma: 0.3
+        - name: linear
+          params:
+            out_features: 64
+        - name: lif
+          params: {}
+        - name: linear
+          params:
+            out_features: 64
+        - name: lif
+          params: {}
+        - name: li
+          params: {}
+        - name: linear
+          params:
+            out_features: 1
+    device: cuda
+    policy:
+      name: gaussian
+      params:
+        clip_mean_actions: true
+        initial_log_std: -1.0
+    rollouts: 200
+    sequence_length: 64
+    learning_rate: 1e-3
+    learning_rate_scheduler: null
+    entropy_loss_scale: 0.0
+    observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
+    experiment:
+      write_interval: 10000
+
+runner:
+  mode: train
+  seed: 42
+  deterministic: true
+  experiment_name: reinforce_pendulum_snn
+  output_dir: ${hydra:runtime.output_dir}
+  checkpoint_path: null
+  dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
+  dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
+
+trainer:
+  use_parallel: false
+  eval_timesteps: 10000
+  params:
+    timesteps: 1000000
+    headless: true
+    close_environment_at_exit: false
