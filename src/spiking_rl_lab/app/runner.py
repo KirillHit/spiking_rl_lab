@@ -74,6 +74,7 @@ class Runner:
                 return self._train(cfg)
             finally:
                 log_model_metadata(run, cfg.runner.output_dir)
+                log_artifact_if_exists(cfg.runner.output_dir / "run.log")
 
     def evaluate(self, cfg: BaseConfig, checkpoint_path: Path | None = None) -> float:
         """Run the evaluation loop."""
@@ -126,6 +127,7 @@ class Runner:
                     },
                 },
             )
+            log_artifact_if_exists(cfg.runner.output_dir / "run.log")
 
         log.info("Best trial: %d", study.best_trial.number)
         log.info("Best value: %.6g", study.best_value)
@@ -195,7 +197,6 @@ class Runner:
             log.exception("Training failed!")
             raise
         finally:
-            log_artifact_if_exists(cfg.runner.output_dir / "run.log")
             log_artifact_if_exists(cfg.runner.output_dir / "checkpoints" / "best_agent.pt")
 
     @contextmanager
