@@ -51,7 +51,7 @@ def log_git_diff_artifact(folder: Path) -> None:
             stderr=subprocess.DEVNULL,
         ).strip()
         diff = subprocess.check_output(
-            ["git", "diff"],  # noqa: S607
+            ["git", "diff", "HEAD"],  # noqa: S607
             text=True,
             stderr=subprocess.DEVNULL,
         )

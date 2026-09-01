@@ -1,8 +1,9 @@
 n_trials: 50
 n_jobs: 1
+direction: maximize
 parameters:
-  - parameter: "algorithm.params.learning_rate"
-    type: "float"
+  - parameter: agent.params.learning_rate
+    type: float
     low: 1e-5
     high: 1e-2
     log: true

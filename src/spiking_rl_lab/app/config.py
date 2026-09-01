@@ -61,6 +61,7 @@ class OptunaConfig:
 
     n_trials: int = MISSING  # Number of trials to run
     n_jobs: int = MISSING
+    direction: str = "maximize"
     parameters: list[OptunaParameter] = field(default_factory=list)  # List of parameters
 
 
