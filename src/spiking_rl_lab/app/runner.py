@@ -27,7 +27,7 @@ from spiking_rl_lab.core.exception import SpikingRLLabError, TrainerCreationErro
 from spiking_rl_lab.envs.builder import build_env
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from pathlib import Path
 
     from spiking_rl_lab.agents.base_agent import BaseAgent
@@ -111,7 +111,7 @@ class Runner:
         raise NotImplementedError
 
     @contextmanager
-    def _trainer_context(self, cfg: BaseConfig) -> Iterator[Trainer]:
+    def _trainer_context(self, cfg: BaseConfig) -> Generator[Trainer, None, None]:
         """Yield a configured trainer and close its environment afterwards.
 
         Returns:
