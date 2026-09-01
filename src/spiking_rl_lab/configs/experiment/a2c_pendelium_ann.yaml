@@ -1,0 +1,76 @@
+# @package _global_
+# A2C scaffold with feed-forward policy and value networks on Pendulum-v1.
+env:
+  name: gymnasium
+  params:
+    id: Pendulum-v1
+    n_envs: 16
+    render: false
+
+agent:
+  name: a2c
+  params:
+    policy_network:
+      nodes:
+        - name: linear
+          params:
+            out_features: 64
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 64
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 1
+    value_network:
+      nodes:
+        - name: linear
+          params:
+            out_features: 64
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 64
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 1
+    device: cuda
+    policy:
+      name: gaussian
+      params:
+        clip_mean_actions: true
+        initial_log_std: -1.0
+    rollouts: 16
+    learning_rate: 1e-3
+    learning_rate_scheduler: null
+    observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
+    experiment:
+      write_interval: 10000
+
+runner:
+  mode: train
+  seed: 42
+  deterministic: true
+  experiment_name: a2c_pendelium_ann
+  output_dir: ${hydra:runtime.output_dir}
+  checkpoint_path: null
+  dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
+  dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
+
+trainer:
+  use_parallel: false
+  eval_timesteps: 10000
+  params:
+    timesteps: 1000000
+    headless: true
+    close_environment_at_exit: false

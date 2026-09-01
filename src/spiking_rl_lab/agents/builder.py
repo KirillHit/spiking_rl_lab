@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-AGENT_MODULES = ("spiking_rl_lab.agents.reinforce",)
+AGENT_MODULES = ("spiking_rl_lab.agents.a2c", "spiking_rl_lab.agents.reinforce")
 AGENT_REGISTRY: dict[str, type[BaseAgent]] = {}
 AGENT_SPEC = RegistrySpec[BaseAgent](
     registry=AGENT_REGISTRY,
