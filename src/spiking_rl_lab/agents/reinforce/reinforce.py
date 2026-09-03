@@ -39,6 +39,7 @@ class Reinforce(BaseAgent):
         super().__init__(cfg, env=env)
 
         try:
+            self.policy = build_policy(cfg.policy, action_space=env.action_space).to(cfg.device)
             self.policy_network = NodeNetwork(
                 cfg.policy_network,
                 input_shape=TensorShape.dense(flatdim(env.observation_space)),
@@ -47,9 +48,8 @@ class Reinforce(BaseAgent):
                 "REINFORCE policy network output",
                 self.policy_network.output_shape,
                 shape_type=DenseTensorShape,
-                fields={"features": flatdim(env.action_space)},
+                fields={"features": self.policy.required_output_features},
             )
-            self.policy = build_policy(cfg.policy, action_space=env.action_space).to(cfg.device)
         except Exception as exc:
             msg = "Failed to create REINFORCE policy components"
             raise AgentCreationError(msg) from exc

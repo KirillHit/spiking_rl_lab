@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-POLICY_MODULES = ["spiking_rl_lab.policies.standard"]
+POLICY_MODULES = ["spiking_rl_lab.policies.beta", "spiking_rl_lab.policies.standard"]
 POLICY_REGISTRY: dict[str, type[BasePolicy]] = {}
 POLICY_SPEC = RegistrySpec[BasePolicy](
     registry=POLICY_REGISTRY,

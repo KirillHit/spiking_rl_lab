@@ -31,6 +31,11 @@ class BasePolicy(torch.nn.Module, ConfiguredBase, ABC):
         self.action_space = action_space
         self.num_actions = flatdim(action_space)
 
+    @property
+    def required_output_features(self) -> int:
+        """Return the number of network features consumed by this policy."""
+        return self.num_actions
+
     @abstractmethod
     def distribution(self, features: torch.Tensor) -> ActionDistribution:
         """Build an action distribution from a policy-network output tensor."""
