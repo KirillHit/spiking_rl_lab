@@ -59,8 +59,8 @@ class OptunaParameter:
 class OptunaConfig:
     """Hyperparameter optimization configuration for Optuna."""
 
-    n_trials: int = MISSING  # Number of trials to run
-    n_jobs: int = MISSING
+    n_trials: int = 50
+    n_jobs: int = 1
     direction: str = "maximize"
     parameters: list[OptunaParameter] = field(default_factory=list)  # List of parameters
 

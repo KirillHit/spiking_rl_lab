@@ -1,5 +1,5 @@
 # @package _global_
-# A2C with feed-forward policy and value networks on Pendulum-v1.
+# A2C with an SNN Beta policy and a feed-forward value network on Pendulum-v1.
 env:
   name: gymnasium
   params:
@@ -12,21 +12,18 @@ agent:
   params:
     policy_network:
       nodes:
+        - name: population_code
+          params:
+            neurons_per_feature: 16
+            sigma: 0.3
         - name: linear
           params:
             out_features: 64
-        - name: torch_activation
-          params:
-            activation: relu
-        - name: linear
-          params:
-            out_features: 64
-        - name: torch_activation
-          params:
-            activation: relu
+        - name: lif
         - name: linear
           params:
             out_features: 2
+        - name: li
     value_network:
       nodes:
         - name: linear
@@ -70,7 +67,7 @@ runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: a2c_pendelium_ann
+  experiment_name: a2c_pendelium_snn
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
   dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
