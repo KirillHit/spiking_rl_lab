@@ -110,6 +110,7 @@ class Runner:
                 lambda trial: self._objective(trial, cfg, run.info.run_id),
                 n_trials=cfg.optuna.n_trials,
                 n_jobs=cfg.optuna.n_jobs,
+                timeout=cfg.optuna.timeout,
                 catch=(Exception,),
             )
             best_run_id = study.best_trial.user_attrs["mlflow_run_id"]

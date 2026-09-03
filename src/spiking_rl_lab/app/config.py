@@ -61,6 +61,7 @@ class OptunaConfig:
 
     n_trials: int = 50
     n_jobs: int = 1
+    timeout: float | None = None  # Seconds; a running trial is allowed to finish.
     direction: str = "maximize"
     parameters: list[OptunaParameter] = field(default_factory=list)  # List of parameters
 
