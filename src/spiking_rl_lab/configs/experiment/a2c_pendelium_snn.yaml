@@ -20,6 +20,8 @@ agent:
           params:
             out_features: 64
         - name: lif
+          params:
+            v_th: 0.2
         - name: linear
           params:
             out_features: 2
@@ -49,15 +51,15 @@ agent:
     rollouts: 64
     sequence_length: 64
     discount_factor: 0.99
-    gae_lambda: 0.95
-    policy_learning_rate: 1e-3
+    gae_lambda: 0.99
+    policy_learning_rate: 1.5e-3
     value_learning_rate: 1e-3
     policy_learning_rate_scheduler: null
     value_learning_rate_scheduler: null
     observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
     policy_grad_norm_clip: 0.5
     value_grad_norm_clip: 0.5
-    entropy_loss_scale: 1e-3
+    entropy_loss_scale: 5e-4
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:

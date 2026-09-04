@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 
 import norse.torch as snn
 import torch
-from norse.torch.functional.leaky_integrator import LIParameters, LIState
-from norse.torch.functional.lif import LIFFeedForwardState, LIFParameters
+from norse.torch.functional.leaky_integrator_box import LIBoxParameters, LIBoxState
+from norse.torch.functional.lif_box import LIFBoxFeedForwardState, LIFBoxParameters
 
 from spiking_rl_lab.networks.nodes.base_node import BaseNode
 from spiking_rl_lab.networks.nodes.builder import register_node
@@ -42,7 +42,6 @@ class LIFNode(BaseNode):
         """LIF node configuration."""
 
         dt: float = 0.001
-        tau_syn_inv: float = 200.0
         tau_mem_inv: float = 100.0
         v_leak: float = 0.0
         v_th: float = 1.0
@@ -50,10 +49,9 @@ class LIFNode(BaseNode):
         method: str = "super"
         alpha: float = 100.0
 
-        def parameters(self) -> LIFParameters:
-            """Build Norse LIF parameters."""
-            return LIFParameters(
-                tau_syn_inv=torch.as_tensor(self.tau_syn_inv),
+        def parameters(self) -> LIFBoxParameters:
+            """Build Norse LIF box parameters."""
+            return LIFBoxParameters(
                 tau_mem_inv=torch.as_tensor(self.tau_mem_inv),
                 v_leak=torch.as_tensor(self.v_leak),
                 v_th=torch.as_tensor(self.v_th),
@@ -65,24 +63,24 @@ class LIFNode(BaseNode):
     def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
         """Initialize the node."""
         super().__init__(cfg, input_shape)
-        self._cell = snn.LIFCell(p=cfg.parameters(), dt=cfg.dt)
+        self._cell = snn.LIFBoxCell(p=cfg.parameters(), dt=cfg.dt)
 
     @property
     def output_shape(self) -> TensorShape:
         """Return output shape."""
         return self._input_shape
 
-    def initial_state(self, inputs: torch.Tensor) -> LIFFeedForwardState:
+    def initial_state(self, inputs: torch.Tensor) -> LIFBoxFeedForwardState:
         """Create the LIF cell's resting state for ``inputs``."""
         return self._cell.initial_state(inputs)
 
     def reset_state(
-        self, state: LIFFeedForwardState | None, dones: torch.Tensor
-    ) -> LIFFeedForwardState | None:
+        self, state: LIFBoxFeedForwardState | None, dones: torch.Tensor
+    ) -> LIFBoxFeedForwardState | None:
         """Restore completed environments to the LIF resting state."""
         if state is None:
             return None
-        return _reset_state_rows(state, self.initial_state(state.i), dones)
+        return _reset_state_rows(state, self.initial_state(state.v), dones)
 
     def forward(
         self,
@@ -103,14 +101,12 @@ class LINode(BaseNode):
         """LI node configuration."""
 
         dt: float = 0.001
-        tau_syn_inv: float = 200.0
         tau_mem_inv: float = 100.0
         v_leak: float = 0.0
 
-        def parameters(self) -> LIParameters:
-            """Build Norse LI parameters."""
-            return LIParameters(
-                tau_syn_inv=torch.as_tensor(self.tau_syn_inv),
+        def parameters(self) -> LIBoxParameters:
+            """Build Norse LI box parameters."""
+            return LIBoxParameters(
                 tau_mem_inv=torch.as_tensor(self.tau_mem_inv),
                 v_leak=torch.as_tensor(self.v_leak),
             )
@@ -118,22 +114,22 @@ class LINode(BaseNode):
     def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
         """Initialize the node."""
         super().__init__(cfg, input_shape)
-        self._cell = snn.LICell(p=cfg.parameters(), dt=cfg.dt)
+        self._cell = snn.LIBoxCell(p=cfg.parameters(), dt=cfg.dt)
 
     @property
     def output_shape(self) -> TensorShape:
         """Return output shape."""
         return self._input_shape
 
-    def initial_state(self, inputs: torch.Tensor) -> LIState:
+    def initial_state(self, inputs: torch.Tensor) -> LIBoxState:
         """Create the leaky integrator's resting state for ``inputs``."""
         return self._cell.initial_state(inputs)
 
-    def reset_state(self, state: LIState | None, dones: torch.Tensor) -> LIState | None:
+    def reset_state(self, state: LIBoxState | None, dones: torch.Tensor) -> LIBoxState | None:
         """Restore completed environments to the integrator resting state."""
         if state is None:
             return None
-        return _reset_state_rows(state, self.initial_state(state.i), dones)
+        return _reset_state_rows(state, self.initial_state(state.v), dones)
 
     def forward(
         self,
