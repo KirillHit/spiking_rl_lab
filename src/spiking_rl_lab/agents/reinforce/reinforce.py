@@ -76,12 +76,6 @@ class Reinforce(BaseAgent):
 
         if cfg.observation_preprocessor is None:
             self._observation_preprocessor = self._empty_preprocessor
-        elif env.num_envs == 1:
-            log.warning(
-                "Disabling observation preprocessor: a single environment does not provide "
-                "a batch for updating preprocessing statistics"
-            )
-            self._observation_preprocessor = self._empty_preprocessor
         else:
             kwargs = dict(cfg.observation_preprocessor_kwargs)
             kwargs.setdefault("size", self.observation_space)
