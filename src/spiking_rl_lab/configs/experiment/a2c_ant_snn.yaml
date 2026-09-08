@@ -20,10 +20,14 @@ agent:
           params:
             out_features: 128
         - name: lif
-        - name: linear
+        - name: skip
           params:
-            out_features: 128
-        - name: lif
+            merge: concat
+            nodes:
+              - name: linear
+                params:
+                  out_features: 128
+              - name: lif
         - name: linear
           params:
             out_features: 16
@@ -32,13 +36,13 @@ agent:
       nodes:
         - name: linear
           params:
-            out_features: 64
+            out_features: 128
         - name: torch_activation
           params:
             activation: relu
         - name: linear
           params:
-            out_features: 64
+            out_features: 128
         - name: torch_activation
           params:
             activation: relu
@@ -78,7 +82,7 @@ runner:
 
 trainer:
   use_parallel: false
-  eval_timesteps: 10000
+  eval_timesteps: 100000
   params:
     timesteps: 3000000
     headless: true

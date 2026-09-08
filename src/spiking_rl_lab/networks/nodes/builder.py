@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 NODE_MODULES = (
     "spiking_rl_lab.networks.nodes.standard.linear",
+    "spiking_rl_lab.networks.nodes.standard.skip",
     "spiking_rl_lab.networks.nodes.standard.convolutions",
     "spiking_rl_lab.networks.nodes.encodings.population",
     "spiking_rl_lab.networks.nodes.decodings.opponent",
