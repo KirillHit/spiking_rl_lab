@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
@@ -16,6 +17,7 @@ from spiking_rl_lab.agents.base_agent import BaseAgent
 from spiking_rl_lab.agents.builder import register_agent
 from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.validation import require_shape_fields
+from spiking_rl_lab.networks.hooks import collect_forward_outputs, mean_spike_activity
 from spiking_rl_lab.networks.node_network import NodeNetwork
 from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape
 from spiking_rl_lab.networks.state import ListState, detach_state
@@ -291,7 +293,13 @@ class A2C(BaseAgent):
         rollout_steps: int,
         returns: torch.Tensor,
         advantages: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        dict[str, torch.Tensor],
+    ]:
         """Replay a rollout and compute actor-critic losses with truncated BPTT."""
         observations = self.memory.get_tensor_by_name("observations")
         actions = self.memory.get_tensor_by_name("actions")
@@ -305,20 +313,31 @@ class A2C(BaseAgent):
         policy_state = self._rollout_policy_state
         value_state = self._rollout_value_state
 
-        for step in range(rollout_steps):
-            policy_features, policy_state = self.policy_network(observations[step], policy_state)
-            predicted_values, value_state = self.value_network(observations[step], value_state)
-            distribution = self.policy.distribution(policy_features)
-            policy_terms.append(-(advantages[step] * distribution.log_prob(actions[step])).mean())
-            value_terms.append(torch.nn.functional.mse_loss(predicted_values, returns[step]))
-            if self.cfg.entropy_loss_scale:
-                entropy_terms.append(-self.cfg.entropy_loss_scale * distribution.entropy().mean())
+        with collect_forward_outputs(
+            self.policy_network,
+            partial(mean_spike_activity, dim=0),
+            detach=not self.cfg.spike_activity_loss_scale,
+        ) as activity_terms:
+            for step in range(rollout_steps):
+                policy_features, policy_state = self.policy_network(
+                    observations[step], policy_state
+                )
+                predicted_values, value_state = self.value_network(observations[step], value_state)
+                distribution = self.policy.distribution(policy_features)
+                policy_terms.append(
+                    -(advantages[step] * distribution.log_prob(actions[step])).mean()
+                )
+                value_terms.append(torch.nn.functional.mse_loss(predicted_values, returns[step]))
+                if self.cfg.entropy_loss_scale:
+                    entropy_terms.append(
+                        -self.cfg.entropy_loss_scale * distribution.entropy().mean()
+                    )
 
-            policy_state = self.policy_network.reset_state(policy_state, dones[step])
-            value_state = self.value_network.reset_state(value_state, dones[step])
-            if (step + 1) % self.cfg.sequence_length == 0:
-                policy_state = detach_state(policy_state)
-                value_state = detach_state(value_state)
+                policy_state = self.policy_network.reset_state(policy_state, dones[step])
+                value_state = self.value_network.reset_state(value_state, dones[step])
+                if (step + 1) % self.cfg.sequence_length == 0:
+                    policy_state = detach_state(policy_state)
+                    value_state = detach_state(value_state)
 
         policy_loss = torch.stack(policy_terms).mean()
         value_loss = torch.stack(value_terms).mean()
@@ -327,7 +346,18 @@ class A2C(BaseAgent):
             if entropy_terms
             else torch.zeros((), device=self.device)
         )
-        return policy_loss, value_loss, entropy_loss
+        neuron_activity = {
+            name: torch.stack(layer_terms).mean(dim=0)
+            for name, layer_terms in activity_terms.items()
+        }
+        activity_loss = (
+            self.cfg.spike_activity_loss_scale
+            * torch.stack([rates.square().mean() for rates in neuron_activity.values()]).mean()
+            if neuron_activity
+            else torch.zeros((), device=self.device)
+        )
+        layer_activity = {name: rates.mean() for name, rates in neuron_activity.items()}
+        return policy_loss, value_loss, entropy_loss, activity_loss, layer_activity
 
     def update(self, *, timestep: int, timesteps: int) -> None:
         """Update the policy and value networks from the collected rollout."""
@@ -349,10 +379,12 @@ class A2C(BaseAgent):
             discount_factor=self.cfg.discount_factor,
             lambda_coefficient=self.cfg.gae_lambda,
         )
-        policy_loss, value_loss, entropy_loss = self._loss(rollout_steps, returns, advantages)
+        policy_loss, value_loss, entropy_loss, activity_loss, layer_activity = self._loss(
+            rollout_steps, returns, advantages
+        )
         self.policy_optimizer.zero_grad(set_to_none=True)
         self.value_optimizer.zero_grad(set_to_none=True)
-        (policy_loss + value_loss + entropy_loss).backward()
+        (policy_loss + value_loss + entropy_loss + activity_loss).backward()
 
         if self.cfg.policy_grad_norm_clip:
             torch.nn.utils.clip_grad_norm_(self._policy_parameters, self.cfg.policy_grad_norm_clip)
@@ -368,6 +400,10 @@ class A2C(BaseAgent):
 
         self.track_data("Loss / Policy loss", policy_loss.item())
         self.track_data("Loss / Value loss", value_loss.item())
+        for name, activity in layer_activity.items():
+            self.track_data(f"Activity / {name}", activity.item())
+        if self.cfg.spike_activity_loss_scale:
+            self.track_data("Loss / Spike activity loss", activity_loss.item())
         if self.cfg.entropy_loss_scale:
             self.track_data("Loss / Entropy loss", entropy_loss.item())
         self.track_data(

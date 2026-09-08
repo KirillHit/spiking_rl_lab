@@ -42,12 +42,22 @@ class LIFNode(BaseNode):
         """LIF node configuration."""
 
         dt: float = 0.001
-        tau_mem_inv: float = 100.0
+        tau_mem_inv: float = 400.0
+        learnable_tau: bool = True
         v_leak: float = 0.0
-        v_th: float = 1.0
+        v_th: float = 0.25
         v_reset: float = 0.0
         method: str = "super"
         alpha: float = 100.0
+
+        def validate(self) -> None:
+            """Validate the time step and learnable tau initialization."""
+            if not self.dt > 0.0:
+                msg = "dt must be positive"
+                raise ValueError(msg)
+            if self.learnable_tau and not 0.0 < self.dt * self.tau_mem_inv < 1.0:
+                msg = "Learnable tau requires 0 < dt * tau_mem_inv < 1"
+                raise ValueError(msg)
 
         def parameters(self) -> LIFBoxParameters:
             """Build Norse LIF box parameters."""
@@ -64,6 +74,10 @@ class LIFNode(BaseNode):
         """Initialize the node."""
         super().__init__(cfg, input_shape)
         self._cell = snn.LIFBoxCell(p=cfg.parameters(), dt=cfg.dt)
+        self.register_parameter("_tau_logit", None)
+        if cfg.learnable_tau:
+            k = cfg.dt * cfg.tau_mem_inv
+            self._tau_logit = torch.nn.Parameter(torch.logit(torch.tensor(k)))
 
     @property
     def output_shape(self) -> TensorShape:
@@ -88,6 +102,10 @@ class LIFNode(BaseNode):
         state: ListState | None = None,
     ) -> tuple[torch.Tensor, ListState]:
         """Run the LIF cell for one step."""
+        if self._tau_logit is not None:
+            self._cell.p = self._cell.p._replace(
+                tau_mem_inv=self._tau_logit.sigmoid() / self._cell.dt,
+            )
         spikes, next_state = self._cell(inputs, state=state)
         return spikes, next_state
 
@@ -101,8 +119,18 @@ class LINode(BaseNode):
         """LI node configuration."""
 
         dt: float = 0.001
-        tau_mem_inv: float = 100.0
+        tau_mem_inv: float = 200.0
+        learnable_tau: bool = True
         v_leak: float = 0.0
+
+        def validate(self) -> None:
+            """Validate the time step and learnable tau initialization."""
+            if not self.dt > 0.0:
+                msg = "dt must be positive"
+                raise ValueError(msg)
+            if self.learnable_tau and not 0.0 < self.dt * self.tau_mem_inv < 1.0:
+                msg = "Learnable tau requires 0 < dt * tau_mem_inv < 1"
+                raise ValueError(msg)
 
         def parameters(self) -> LIBoxParameters:
             """Build Norse LI box parameters."""
@@ -115,6 +143,10 @@ class LINode(BaseNode):
         """Initialize the node."""
         super().__init__(cfg, input_shape)
         self._cell = snn.LIBoxCell(p=cfg.parameters(), dt=cfg.dt)
+        self.register_parameter("_tau_logit", None)
+        if cfg.learnable_tau:
+            k = cfg.dt * cfg.tau_mem_inv
+            self._tau_logit = torch.nn.Parameter(torch.logit(torch.tensor(k)))
 
     @property
     def output_shape(self) -> TensorShape:
@@ -137,5 +169,9 @@ class LINode(BaseNode):
         state: ListState | None = None,
     ) -> tuple[torch.Tensor, ListState]:
         """Run the LI cell for one step."""
+        if self._tau_logit is not None:
+            self._cell.p = self._cell.p._replace(
+                tau_mem_inv=self._tau_logit.sigmoid() / self._cell.dt,
+            )
         outputs, next_state = self._cell(inputs, state=state)
         return outputs, next_state

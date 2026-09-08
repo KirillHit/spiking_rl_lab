@@ -20,8 +20,10 @@ agent:
           params:
             out_features: 64
         - name: lif
+        - name: linear
           params:
-            v_th: 0.2
+            out_features: 64
+        - name: lif
         - name: linear
           params:
             out_features: 2
@@ -60,6 +62,7 @@ agent:
     policy_grad_norm_clip: 0.5
     value_grad_norm_clip: 0.5
     entropy_loss_scale: 5e-4
+    spike_activity_loss_scale: 0.025
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:
@@ -79,6 +82,6 @@ trainer:
   use_parallel: false
   eval_timesteps: 10000
   params:
-    timesteps: 1000000
+    timesteps: 600000
     headless: true
     close_environment_at_exit: false

@@ -28,8 +28,19 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
     class Config:
         """Base node configuration."""
 
+        def validate(self) -> None:
+            """Validate node-specific configuration constraints.
+
+            The base implementation does nothing, subclasses define constraints.
+
+            Raises:
+                ValueError: If a subclass detects an invalid configuration.
+
+            """
+
     def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
         """Store node configuration."""
+        cfg.validate()
         super().__init__()
         ConfiguredBase.__init__(self, cfg)
         self._input_shape = input_shape
