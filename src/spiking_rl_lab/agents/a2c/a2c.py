@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
@@ -315,7 +314,7 @@ class A2C(BaseAgent):
 
         with collect_forward_outputs(
             self.policy_network,
-            partial(mean_spike_activity, dim=0),
+            mean_spike_activity,
             detach=not self.cfg.spike_activity_loss_scale,
         ) as activity_terms:
             for step in range(rollout_steps):
@@ -346,17 +345,14 @@ class A2C(BaseAgent):
             if entropy_terms
             else torch.zeros((), device=self.device)
         )
-        neuron_activity = {
-            name: torch.stack(layer_terms).mean(dim=0)
-            for name, layer_terms in activity_terms.items()
+        layer_activity = {
+            name: torch.stack(layer_terms).mean() for name, layer_terms in activity_terms.items()
         }
         activity_loss = (
-            self.cfg.spike_activity_loss_scale
-            * torch.stack([rates.square().mean() for rates in neuron_activity.values()]).mean()
-            if neuron_activity
+            self.cfg.spike_activity_loss_scale * torch.stack(list(layer_activity.values())).mean()
+            if layer_activity
             else torch.zeros((), device=self.device)
         )
-        layer_activity = {name: rates.mean() for name, rates in neuron_activity.items()}
         return policy_loss, value_loss, entropy_loss, activity_loss, layer_activity
 
     def update(self, *, timestep: int, timesteps: int) -> None:

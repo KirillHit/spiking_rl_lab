@@ -45,7 +45,7 @@ class LIFNode(BaseNode):
         tau_mem_inv: float = 400.0
         learnable_tau: bool = True
         v_leak: float = 0.0
-        v_th: float = 0.25
+        v_th: float = 1.0
         v_reset: float = 0.0
         method: str = "super"
         alpha: float = 100.0
@@ -77,7 +77,8 @@ class LIFNode(BaseNode):
         self.register_parameter("_tau_logit", None)
         if cfg.learnable_tau:
             k = cfg.dt * cfg.tau_mem_inv
-            self._tau_logit = torch.nn.Parameter(torch.logit(torch.tensor(k)))
+            tau_shape = (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
+            self._tau_logit = torch.nn.Parameter(torch.logit(torch.full(tau_shape, k)))
 
     @property
     def output_shape(self) -> TensorShape:
@@ -146,7 +147,8 @@ class LINode(BaseNode):
         self.register_parameter("_tau_logit", None)
         if cfg.learnable_tau:
             k = cfg.dt * cfg.tau_mem_inv
-            self._tau_logit = torch.nn.Parameter(torch.logit(torch.tensor(k)))
+            tau_shape = (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
+            self._tau_logit = torch.nn.Parameter(torch.logit(torch.full(tau_shape, k)))
 
     @property
     def output_shape(self) -> TensorShape:

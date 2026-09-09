@@ -20,14 +20,10 @@ agent:
           params:
             out_features: 128
         - name: lif
-        - name: skip
+        - name: linear
           params:
-            merge: concat
-            nodes:
-              - name: linear
-                params:
-                  out_features: 128
-              - name: lif
+            out_features: 128
+        - name: lif
         - name: linear
           params:
             out_features: 16
@@ -64,7 +60,7 @@ agent:
     policy_grad_norm_clip: 0.5
     value_grad_norm_clip: 0.5
     entropy_loss_scale: 5e-4
-    spike_activity_loss_scale: 0.025
+    spike_activity_loss_scale: 0.01
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:

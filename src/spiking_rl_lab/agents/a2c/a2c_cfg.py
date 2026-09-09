@@ -81,7 +81,7 @@ class A2CConfig(BaseAgent.Config):
     """Entropy regularization coefficient added to the policy loss."""
 
     spike_activity_loss_scale: float = 0.0
-    """Mean squared per-neuron spike rate penalty coefficient. Set to ``0`` to disable."""
+    """Mean spike activity penalty coefficient. Set to ``0`` to disable."""
 
     time_limit_bootstrap: bool = False
     """Whether to bootstrap returns at time-limit truncations."""
