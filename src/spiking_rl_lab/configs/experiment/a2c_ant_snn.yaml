@@ -60,7 +60,8 @@ agent:
     policy_grad_norm_clip: 0.5
     value_grad_norm_clip: 0.5
     entropy_loss_scale: 5e-4
-    spike_activity_loss_scale: 0.01
+    spike_activity_loss_scale: 0.05
+    spike_activity_target: 0.15
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:

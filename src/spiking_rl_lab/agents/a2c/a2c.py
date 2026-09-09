@@ -16,7 +16,11 @@ from spiking_rl_lab.agents.base_agent import BaseAgent
 from spiking_rl_lab.agents.builder import register_agent
 from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.validation import require_shape_fields
-from spiking_rl_lab.networks.hooks import collect_forward_outputs, mean_spike_activity
+from spiking_rl_lab.networks.activity import (
+    collect_forward_outputs,
+    mean_spike_activity,
+    network_spike_activity,
+)
 from spiking_rl_lab.networks.node_network import NodeNetwork
 from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape
 from spiking_rl_lab.networks.state import ListState, detach_state
@@ -298,6 +302,7 @@ class A2C(BaseAgent):
         torch.Tensor,
         torch.Tensor,
         dict[str, torch.Tensor],
+        torch.Tensor,
     ]:
         """Replay a rollout and compute actor-critic losses with truncated BPTT."""
         observations = self.memory.get_tensor_by_name("observations")
@@ -348,12 +353,16 @@ class A2C(BaseAgent):
         layer_activity = {
             name: torch.stack(layer_terms).mean() for name, layer_terms in activity_terms.items()
         }
-        activity_loss = (
-            self.cfg.spike_activity_loss_scale * torch.stack(list(layer_activity.values())).mean()
+        activity = (
+            network_spike_activity(self.policy_network, layer_activity)
             if layer_activity
             else torch.zeros((), device=self.device)
         )
-        return policy_loss, value_loss, entropy_loss, activity_loss, layer_activity
+        activity_penalty = activity
+        if self.cfg.spike_activity_target is not None:
+            activity_penalty = (activity - self.cfg.spike_activity_target).clamp_min(0)
+        activity_loss = self.cfg.spike_activity_loss_scale * activity_penalty
+        return policy_loss, value_loss, entropy_loss, activity_loss, layer_activity, activity
 
     def update(self, *, timestep: int, timesteps: int) -> None:
         """Update the policy and value networks from the collected rollout."""
@@ -375,8 +384,8 @@ class A2C(BaseAgent):
             discount_factor=self.cfg.discount_factor,
             lambda_coefficient=self.cfg.gae_lambda,
         )
-        policy_loss, value_loss, entropy_loss, activity_loss, layer_activity = self._loss(
-            rollout_steps, returns, advantages
+        policy_loss, value_loss, entropy_loss, activity_loss, layer_activity, mean_activity = (
+            self._loss(rollout_steps, returns, advantages)
         )
         self.policy_optimizer.zero_grad(set_to_none=True)
         self.value_optimizer.zero_grad(set_to_none=True)
@@ -398,6 +407,8 @@ class A2C(BaseAgent):
         self.track_data("Loss / Value loss", value_loss.item())
         for name, activity in layer_activity.items():
             self.track_data(f"Activity / {name}", activity.item())
+        if self.cfg.spike_activity_target is not None and layer_activity:
+            self.track_data("Activity / Mean", mean_activity.item())
         if self.cfg.spike_activity_loss_scale:
             self.track_data("Loss / Spike activity loss", activity_loss.item())
         if self.cfg.entropy_loss_scale:

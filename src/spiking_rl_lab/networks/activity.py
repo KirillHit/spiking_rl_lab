@@ -1,14 +1,15 @@
-"""Temporary PyTorch forward hooks."""
+"""Collect and aggregate spike activity from network nodes."""
 
 from __future__ import annotations
 
+import math
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from spiking_rl_lab.networks.nodes.spiking.activations import LIFNode
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable, Generator, Mapping
 
     import torch
     from torch import nn
@@ -29,6 +30,19 @@ def mean_spike_activity(
 ) -> torch.Tensor:
     """Return spike activity averaged over the selected dimensions, or all by default."""
     return output[0].mean(dim=dim)
+
+
+def network_spike_activity(
+    network: NodeNetwork,
+    layer_activity: Mapping[str, torch.Tensor],
+) -> torch.Tensor:
+    """Average nonempty layer activities by neuron count, including spatial positions."""
+    sizes = {
+        name: math.prod(network.get_submodule(name).output_shape.dims) for name in layer_activity
+    }
+    return sum(activity * sizes[name] for name, activity in layer_activity.items()) / sum(
+        sizes.values()
+    )
 
 
 @contextmanager
