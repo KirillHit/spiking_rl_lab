@@ -16,14 +16,18 @@ from spiking_rl_lab.agents.base_agent import BaseAgent
 from spiking_rl_lab.agents.builder import register_agent
 from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.validation import require_shape_fields
-from spiking_rl_lab.networks.activity import (
+from spiking_rl_lab.networks.node_network import NodeNetwork
+from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape
+from spiking_rl_lab.networks.state import ListState, detach_state
+from spiking_rl_lab.networks.statistics.activity import (
     collect_forward_outputs,
     mean_spike_activity,
     network_spike_activity,
 )
-from spiking_rl_lab.networks.node_network import NodeNetwork
-from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape
-from spiking_rl_lab.networks.state import ListState, detach_state
+from spiking_rl_lab.networks.statistics.normalization import (
+    apply_collected_batch_norm_statistics,
+    enable_batch_norm_statistics_collection,
+)
 from spiking_rl_lab.policies.builder import build_policy
 
 if TYPE_CHECKING:
@@ -384,6 +388,9 @@ class A2C(BaseAgent):
             discount_factor=self.cfg.discount_factor,
             lambda_coefficient=self.cfg.gae_lambda,
         )
+
+        enable_batch_norm_statistics_collection(self.policy_network, self.value_network)
+
         policy_loss, value_loss, entropy_loss, activity_loss, layer_activity, mean_activity = (
             self._loss(rollout_steps, returns, advantages)
         )
@@ -398,6 +405,9 @@ class A2C(BaseAgent):
 
         self.policy_optimizer.step()
         self.value_optimizer.step()
+
+        apply_collected_batch_norm_statistics(self.policy_network, self.value_network)
+
         if self.policy_scheduler is not None:
             self.policy_scheduler.step()
         if self.value_scheduler is not None:
