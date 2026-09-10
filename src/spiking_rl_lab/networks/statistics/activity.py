@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
@@ -32,17 +31,16 @@ def mean_spike_activity(
     return output[0].mean(dim=dim)
 
 
-def network_spike_activity(
-    network: NodeNetwork,
+def spike_activity_moments(
     layer_activity: Mapping[str, torch.Tensor],
-) -> torch.Tensor:
-    """Average nonempty layer activities by neuron count, including spatial positions."""
-    sizes = {
-        name: math.prod(network.get_submodule(name).output_shape.dims) for name in layer_activity
-    }
-    return sum(activity * sizes[name] for name, activity in layer_activity.items()) / sum(
-        sizes.values()
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return the mean and mean square over all neuron firing rates."""
+    neuron_count = sum(activity.numel() for activity in layer_activity.values())
+    mean = sum(activity.sum() for activity in layer_activity.values()) / neuron_count
+    mean_square = (
+        sum(activity.square().sum() for activity in layer_activity.values()) / neuron_count
     )
+    return mean, mean_square
 
 
 @contextmanager

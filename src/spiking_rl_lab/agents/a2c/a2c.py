@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
@@ -22,7 +23,7 @@ from spiking_rl_lab.networks.state import ListState, detach_state
 from spiking_rl_lab.networks.statistics.activity import (
     collect_forward_outputs,
     mean_spike_activity,
-    network_spike_activity,
+    spike_activity_moments,
 )
 from spiking_rl_lab.networks.statistics.normalization import (
     apply_collected_batch_norm_statistics,
@@ -305,8 +306,6 @@ class A2C(BaseAgent):
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
-        dict[str, torch.Tensor],
-        torch.Tensor,
     ]:
         """Replay a rollout and compute actor-critic losses with truncated BPTT."""
         observations = self.memory.get_tensor_by_name("observations")
@@ -323,7 +322,7 @@ class A2C(BaseAgent):
 
         with collect_forward_outputs(
             self.policy_network,
-            mean_spike_activity,
+            partial(mean_spike_activity, dim=0),
             detach=not self.cfg.spike_activity_loss_scale,
         ) as activity_terms:
             for step in range(rollout_steps):
@@ -354,19 +353,24 @@ class A2C(BaseAgent):
             if entropy_terms
             else torch.zeros((), device=self.device)
         )
-        layer_activity = {
-            name: torch.stack(layer_terms).mean() for name, layer_terms in activity_terms.items()
+
+        neuron_activity = {
+            name: torch.stack(layer_terms).mean(dim=0)
+            for name, layer_terms in activity_terms.items()
         }
-        activity = (
-            network_spike_activity(self.policy_network, layer_activity)
-            if layer_activity
-            else torch.zeros((), device=self.device)
-        )
-        activity_penalty = activity
-        if self.cfg.spike_activity_target is not None:
-            activity_penalty = (activity - self.cfg.spike_activity_target).clamp_min(0)
+        layer_activity = {name: rates.mean() for name, rates in neuron_activity.items()}
+        if neuron_activity:
+            mean_activity, activity_penalty = spike_activity_moments(neuron_activity)
+        else:
+            mean_activity = activity_penalty = torch.zeros((), device=self.device)
         activity_loss = self.cfg.spike_activity_loss_scale * activity_penalty
-        return policy_loss, value_loss, entropy_loss, activity_loss, layer_activity, activity
+
+        for name, activity in layer_activity.items():
+            self.track_data(f"Activity / {name}", activity.item())
+        if layer_activity:
+            self.track_data("Activity / Mean", mean_activity.item())
+
+        return policy_loss, value_loss, entropy_loss, activity_loss
 
     def update(self, *, timestep: int, timesteps: int) -> None:
         """Update the policy and value networks from the collected rollout."""
@@ -391,8 +395,8 @@ class A2C(BaseAgent):
 
         enable_batch_norm_statistics_collection(self.policy_network, self.value_network)
 
-        policy_loss, value_loss, entropy_loss, activity_loss, layer_activity, mean_activity = (
-            self._loss(rollout_steps, returns, advantages)
+        policy_loss, value_loss, entropy_loss, activity_loss = self._loss(
+            rollout_steps, returns, advantages
         )
         self.policy_optimizer.zero_grad(set_to_none=True)
         self.value_optimizer.zero_grad(set_to_none=True)
@@ -415,10 +419,6 @@ class A2C(BaseAgent):
 
         self.track_data("Loss / Policy loss", policy_loss.item())
         self.track_data("Loss / Value loss", value_loss.item())
-        for name, activity in layer_activity.items():
-            self.track_data(f"Activity / {name}", activity.item())
-        if self.cfg.spike_activity_target is not None and layer_activity:
-            self.track_data("Activity / Mean", mean_activity.item())
         if self.cfg.spike_activity_loss_scale:
             self.track_data("Loss / Spike activity loss", activity_loss.item())
         if self.cfg.entropy_loss_scale:
