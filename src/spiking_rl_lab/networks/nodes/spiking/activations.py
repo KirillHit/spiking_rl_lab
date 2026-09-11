@@ -44,6 +44,7 @@ class LIFNode(BaseNode):
         dt: float = 0.001
         tau_mem_inv: float = 400.0
         learnable_tau: bool = True
+        shared_tau: bool = False
         v_leak: float = 0.0
         v_th: float = 1.0
         v_reset: float = 0.0
@@ -77,7 +78,11 @@ class LIFNode(BaseNode):
         self.register_parameter("_tau_logit", None)
         if cfg.learnable_tau:
             k = cfg.dt * cfg.tau_mem_inv
-            tau_shape = (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
+            tau_shape = (
+                ()
+                if cfg.shared_tau
+                else (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
+            )
             self._tau_logit = torch.nn.Parameter(torch.logit(torch.full(tau_shape, k)))
 
     @property
@@ -122,6 +127,7 @@ class LINode(BaseNode):
         dt: float = 0.001
         tau_mem_inv: float = 200.0
         learnable_tau: bool = True
+        shared_tau: bool = False
         v_leak: float = 0.0
 
         def validate(self) -> None:
@@ -147,7 +153,11 @@ class LINode(BaseNode):
         self.register_parameter("_tau_logit", None)
         if cfg.learnable_tau:
             k = cfg.dt * cfg.tau_mem_inv
-            tau_shape = (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
+            tau_shape = (
+                ()
+                if cfg.shared_tau
+                else (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
+            )
             self._tau_logit = torch.nn.Parameter(torch.logit(torch.full(tau_shape, k)))
 
     @property
