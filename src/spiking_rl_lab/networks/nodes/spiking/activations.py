@@ -47,6 +47,7 @@ class LIFNode(BaseNode):
         shared_tau: bool = False
         v_leak: float = 0.0
         v_th: float = 1.0
+        learnable_v_th: bool = False
         v_reset: float = 0.0
         method: str = "super"
         alpha: float = 100.0
@@ -58,6 +59,9 @@ class LIFNode(BaseNode):
                 raise ValueError(msg)
             if self.learnable_tau and not 0.0 < self.dt * self.tau_mem_inv < 1.0:
                 msg = "Learnable tau requires 0 < dt * tau_mem_inv < 1"
+                raise ValueError(msg)
+            if self.learnable_v_th and not self.v_th > self.v_reset + 1e-6:
+                msg = "Learnable v_th requires v_th > v_reset + 1e-6"
                 raise ValueError(msg)
 
         def parameters(self) -> LIFBoxParameters:
@@ -84,6 +88,11 @@ class LIFNode(BaseNode):
                 else (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
             )
             self._tau_logit = torch.nn.Parameter(torch.logit(torch.full(tau_shape, k)))
+        self.register_parameter("_v_th_raw", None)
+        if cfg.learnable_v_th:
+            threshold_shape = (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
+            gap = torch.full(threshold_shape, cfg.v_th - cfg.v_reset - 1e-6)
+            self._v_th_raw = torch.nn.Parameter(gap + torch.log(-torch.expm1(-gap)))
 
     @property
     def output_shape(self) -> TensorShape:
@@ -111,6 +120,10 @@ class LIFNode(BaseNode):
         if self._tau_logit is not None:
             self._cell.p = self._cell.p._replace(
                 tau_mem_inv=self._tau_logit.sigmoid() / self._cell.dt,
+            )
+        if self._v_th_raw is not None:
+            self._cell.p = self._cell.p._replace(
+                v_th=self._cell.p.v_reset + torch.nn.functional.softplus(self._v_th_raw) + 1e-6,
             )
         spikes, next_state = self._cell(inputs, state=state)
         return spikes, next_state
