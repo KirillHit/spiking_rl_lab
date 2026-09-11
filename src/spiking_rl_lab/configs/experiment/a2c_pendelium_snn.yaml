@@ -51,7 +51,7 @@ agent:
       params:
         min_shape_offset: 1e-3
     rollouts: 64
-    sequence_length: 64
+    sequence_length: 8
     discount_factor: 0.99
     gae_lambda: 0.99
     policy_learning_rate: 1.5e-3

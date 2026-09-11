@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import time
 from functools import partial
@@ -19,7 +20,11 @@ from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.validation import require_shape_fields
 from spiking_rl_lab.networks.node_network import NodeNetwork
 from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape
-from spiking_rl_lab.networks.state import ListState, detach_state
+from spiking_rl_lab.networks.state import (
+    ListState,
+    concatenate_states,
+    detach_state,
+)
 from spiking_rl_lab.networks.statistics.activity import (
     collect_forward_outputs,
     mean_spike_activity,
@@ -36,6 +41,26 @@ if TYPE_CHECKING:
     from skrl.memories.torch import Memory
 
 log = logging.getLogger(__name__)
+
+
+def _as_sequences(tensor: torch.Tensor, sequence_length: int) -> torch.Tensor:
+    """Arrange rollout data as ``[time, sequence, ...]``."""
+    sequence_count = tensor.shape[0] // sequence_length
+    chunks = tensor.reshape(sequence_count, sequence_length, *tensor.shape[1:])
+    return chunks.transpose(0, 1).flatten(1, 2)
+
+
+@dataclasses.dataclass(slots=True)
+class _SequenceBatch:
+    """Rollout tensors and boundary states arranged as recurrent sequences."""
+
+    observations: torch.Tensor
+    actions: torch.Tensor
+    returns: torch.Tensor
+    advantages: torch.Tensor
+    dones: torch.Tensor
+    policy_state: ListState
+    value_state: ListState
 
 
 def compute_gae(
@@ -150,8 +175,8 @@ class A2C(BaseAgent):
 
         self._policy_state: ListState | None = None
         self._value_state: ListState | None = None
-        self._rollout_policy_state: ListState | None = None
-        self._rollout_value_state: ListState | None = None
+        self._sequence_policy_states: list[ListState] = []
+        self._sequence_value_states: list[ListState] = []
         self._processed_observation: torch.Tensor | None = None
         self._next_observation: torch.Tensor | None = None
         self._current_value: torch.Tensor | None = None
@@ -187,8 +212,8 @@ class A2C(BaseAgent):
     def _reset_rollout(self) -> None:
         """Clear rollout storage without resetting live network states."""
         self.memory.reset()
-        self._rollout_policy_state = None
-        self._rollout_value_state = None
+        self._sequence_policy_states.clear()
+        self._sequence_value_states.clear()
         self._processed_observation = None
         self._next_observation = None
         self._current_value = None
@@ -212,9 +237,9 @@ class A2C(BaseAgent):
                 self._policy_state = self.policy_network.initial_state(inputs)
             if self._value_state is None:
                 self._value_state = self.value_network.initial_state(inputs)
-            if self.training and self._rollout_policy_state is None:
-                self._rollout_policy_state = self._policy_state
-                self._rollout_value_state = self._value_state
+            if self.training and self.memory.memory_index % self.cfg.sequence_length == 0:
+                self._sequence_policy_states.append(detach_state(self._policy_state))
+                self._sequence_value_states.append(detach_state(self._value_state))
 
             policy_features, self._policy_state = self.policy_network(inputs, self._policy_state)
             values, self._value_state = self.value_network(inputs, self._value_state)
@@ -296,61 +321,64 @@ class A2C(BaseAgent):
             )
         super().post_interaction(timestep=timestep, timesteps=timesteps)
 
-    def _loss(
+    def _build_sequence_batch(
         self,
-        rollout_steps: int,
         returns: torch.Tensor,
         advantages: torch.Tensor,
+    ) -> _SequenceBatch:
+        """Arrange a rollout and its saved boundary states as recurrent sequences."""
+        sequence_length = self.cfg.sequence_length
+        dones = torch.logical_or(
+            self.memory.get_tensor_by_name("terminated"),
+            self.memory.get_tensor_by_name("truncated"),
+        )
+        return _SequenceBatch(
+            observations=_as_sequences(
+                self.memory.get_tensor_by_name("observations"), sequence_length
+            ),
+            actions=_as_sequences(self.memory.get_tensor_by_name("actions"), sequence_length),
+            returns=_as_sequences(returns, sequence_length),
+            advantages=_as_sequences(advantages, sequence_length),
+            dones=_as_sequences(dones, sequence_length),
+            policy_state=concatenate_states(self._sequence_policy_states),
+            value_state=concatenate_states(self._sequence_value_states),
+        )
+
+    def _loss(
+        self, batch: _SequenceBatch
     ) -> tuple[
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
     ]:
-        """Replay a rollout and compute actor-critic losses with truncated BPTT."""
-        observations = self.memory.get_tensor_by_name("observations")
-        actions = self.memory.get_tensor_by_name("actions")
-        dones = torch.logical_or(
-            self.memory.get_tensor_by_name("terminated"),
-            self.memory.get_tensor_by_name("truncated"),
-        )
-        policy_terms = []
-        value_terms = []
-        entropy_terms = []
-        policy_state = self._rollout_policy_state
-        value_state = self._rollout_value_state
+        """Replay recurrent sequences and compute A2C losses."""
+        policy_state = batch.policy_state
+        value_state = batch.value_state
+        policy_outputs = []
+        predicted_values = []
 
         with collect_forward_outputs(
             self.policy_network,
             partial(mean_spike_activity, dim=0),
             detach=not self.cfg.spike_activity_loss_scale,
         ) as activity_terms:
-            for step in range(rollout_steps):
+            for step in range(self.cfg.sequence_length):
                 policy_features, policy_state = self.policy_network(
-                    observations[step], policy_state
+                    batch.observations[step], policy_state
                 )
-                predicted_values, value_state = self.value_network(observations[step], value_state)
-                distribution = self.policy.distribution(policy_features)
-                policy_terms.append(
-                    -(advantages[step] * distribution.log_prob(actions[step])).mean()
-                )
-                value_terms.append(torch.nn.functional.mse_loss(predicted_values, returns[step]))
-                if self.cfg.entropy_loss_scale:
-                    entropy_terms.append(
-                        -self.cfg.entropy_loss_scale * distribution.entropy().mean()
-                    )
+                values, value_state = self.value_network(batch.observations[step], value_state)
+                policy_outputs.append(policy_features)
+                predicted_values.append(values)
+                policy_state = self.policy_network.reset_state(policy_state, batch.dones[step])
+                value_state = self.value_network.reset_state(value_state, batch.dones[step])
 
-                policy_state = self.policy_network.reset_state(policy_state, dones[step])
-                value_state = self.value_network.reset_state(value_state, dones[step])
-                if (step + 1) % self.cfg.sequence_length == 0:
-                    policy_state = detach_state(policy_state)
-                    value_state = detach_state(value_state)
-
-        policy_loss = torch.stack(policy_terms).mean()
-        value_loss = torch.stack(value_terms).mean()
+        distribution = self.policy.distribution(torch.stack(policy_outputs))
+        policy_loss = -(batch.advantages * distribution.log_prob(batch.actions)).mean()
+        value_loss = torch.nn.functional.mse_loss(torch.stack(predicted_values), batch.returns)
         entropy_loss = (
-            torch.stack(entropy_terms).mean()
-            if entropy_terms
+            -self.cfg.entropy_loss_scale * distribution.entropy().mean()
+            if self.cfg.entropy_loss_scale
             else torch.zeros((), device=self.device)
         )
 
@@ -374,8 +402,7 @@ class A2C(BaseAgent):
 
     def update(self, *, timestep: int, timesteps: int) -> None:
         """Update the policy and value networks from the collected rollout."""
-        rollout_steps = self.memory.memory_size if self.memory.filled else self.memory.memory_index
-        if not rollout_steps:
+        if not self.memory.filled:
             return
 
         next_inputs = torch.flatten(
@@ -384,10 +411,10 @@ class A2C(BaseAgent):
         with torch.no_grad():
             last_values, _ = self.value_network(next_inputs, self._value_state)
         returns, advantages = compute_gae(
-            rewards=self.memory.get_tensor_by_name("rewards")[:rollout_steps],
-            terminated=self.memory.get_tensor_by_name("terminated")[:rollout_steps],
-            truncated=self.memory.get_tensor_by_name("truncated")[:rollout_steps],
-            values=self.memory.get_tensor_by_name("values")[:rollout_steps],
+            rewards=self.memory.get_tensor_by_name("rewards"),
+            terminated=self.memory.get_tensor_by_name("terminated"),
+            truncated=self.memory.get_tensor_by_name("truncated"),
+            values=self.memory.get_tensor_by_name("values"),
             last_values=last_values,
             discount_factor=self.cfg.discount_factor,
             lambda_coefficient=self.cfg.gae_lambda,
@@ -395,9 +422,8 @@ class A2C(BaseAgent):
 
         enable_batch_norm_statistics_collection(self.policy_network, self.value_network)
 
-        policy_loss, value_loss, entropy_loss, activity_loss = self._loss(
-            rollout_steps, returns, advantages
-        )
+        batch = self._build_sequence_batch(returns, advantages)
+        policy_loss, value_loss, entropy_loss, activity_loss = self._loss(batch)
         self.policy_optimizer.zero_grad(set_to_none=True)
         self.value_optimizer.zero_grad(set_to_none=True)
         (policy_loss + value_loss + entropy_loss + activity_loss).backward()

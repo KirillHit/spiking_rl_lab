@@ -39,7 +39,7 @@ class A2CConfig(BaseAgent.Config):
     """Number of transitions stored in each rollout."""
 
     sequence_length: int = 16
-    """Maximum number of transitions in one truncated-BPTT window."""
+    """Transitions per independently replayed recurrent sequence."""
 
     discount_factor: float = 0.99
     """Reward discount factor used to compute returns."""
@@ -100,6 +100,9 @@ class A2CConfig(BaseAgent.Config):
 
         require_minimum("rollouts", self.rollouts, minimum=1)
         require_minimum("sequence_length", self.sequence_length, minimum=1)
+        if self.rollouts % self.sequence_length:
+            msg = "rollouts must be divisible by sequence_length"
+            raise ValueError(msg)
         require_range("discount_factor", self.discount_factor, minimum=0.0, maximum=1.0)
         require_range("gae_lambda", self.gae_lambda, minimum=0.0, maximum=1.0)
         require_positive("policy_learning_rate", self.policy_learning_rate)
