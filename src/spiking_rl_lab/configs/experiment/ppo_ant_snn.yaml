@@ -1,0 +1,96 @@
+# @package _global_
+# PPO with an SNN Beta policy and a feed-forward value network on Ant-v5.
+env:
+  name: gymnasium
+  params:
+    id: Ant-v5
+    n_envs: 8
+    render: false
+
+agent:
+  name: ppo
+  params:
+    policy_network:
+      nodes:
+        - name: population_code
+          params:
+            neurons_per_feature: 16
+            sigma: 0.3
+        - name: linear
+          params:
+            out_features: 128
+        - name: lif
+        - name: linear
+          params:
+            out_features: 128
+        - name: lif
+        - name: linear
+          params:
+            out_features: 16
+        - name: li
+    value_network:
+      nodes:
+        - name: linear
+          params:
+            out_features: 128
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 128
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 1
+    device: cpu
+    policy:
+      name: beta
+    rollouts: 128
+    sequence_length: 8
+    learning_epochs: 4
+    mini_batches: 4
+    ratio_clip: 0.2
+    value_clip: 0.0
+    value_loss_scale: 1.0
+    kl_threshold: 0.02
+    discount_factor: 0.99
+    gae_lambda: 0.95
+    policy_learning_rate: 1e-3
+    value_learning_rate: 1e-3
+    policy_learning_rate_scheduler: torch.optim.lr_scheduler.LinearLR
+    policy_learning_rate_scheduler_kwargs:
+      start_factor: 1.0
+      end_factor: 0.1
+      # One scheduler step per rollout: floor(5000000 / 128).
+      total_iters: 39062
+    value_learning_rate_scheduler: null
+    observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
+    policy_grad_norm_clip: 0.5
+    value_grad_norm_clip: 0.5
+    entropy_loss_scale: 5e-4
+    spike_activity_loss_scale: 0.025
+    time_limit_bootstrap: true
+    rewards_shaper: null
+    experiment:
+      write_interval: 10000
+
+runner:
+  mode: train
+  seed: 42
+  deterministic: true
+  experiment_name: ppo_ant_snn
+  output_dir: ${hydra:runtime.output_dir}
+  checkpoint_path: null
+  dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
+  dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
+
+trainer:
+  use_parallel: false
+  eval_timesteps: 100000
+  params:
+    timesteps: 5000000
+    headless: true
+    close_environment_at_exit: false

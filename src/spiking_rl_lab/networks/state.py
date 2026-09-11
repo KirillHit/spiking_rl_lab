@@ -47,3 +47,16 @@ def concatenate_states[StateT](states: list[StateT]) -> StateT:
         return {key: concatenate_states([state[key] for state in states]) for key in first}
     return first
 
+
+def select_state[StateT](state: StateT, indices: torch.Tensor) -> StateT:
+    """Select sequences from tensors in a batched network state."""
+    if isinstance(state, torch.Tensor):
+        return state[indices].detach() if state.ndim else state.detach()
+    if isinstance(state, list):
+        return [select_state(item, indices) for item in state]
+    if isinstance(state, tuple):
+        values = tuple(select_state(item, indices) for item in state)
+        return type(state)(*values) if hasattr(state, "_fields") else values
+    if isinstance(state, dict):
+        return {key: select_state(value, indices) for key, value in state.items()}
+    return state
