@@ -32,7 +32,7 @@ def concatenate_states[StateT](states: list[StateT]) -> StateT:
                 raise ValueError(msg)
             return first.detach()
         return torch.cat(
-            [state.expand_as(reference) if not state.ndim else state for state in states]
+            [state.to(reference).expand_as(reference) if not state.ndim else state for state in states]
         )
     if isinstance(first, list):
         return [
