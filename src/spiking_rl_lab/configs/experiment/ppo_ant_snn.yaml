@@ -4,7 +4,7 @@ env:
   name: gymnasium
   params:
     id: Ant-v5
-    n_envs: 8
+    n_envs: 16
     render: false
 
 agent:
@@ -20,25 +20,36 @@ agent:
           params:
             out_features: 128
         - name: lif
+          params:
+            k: 0.4
+            shared_k: true
+            v_th: 0.25
         - name: linear
           params:
             out_features: 128
         - name: lif
+          params:
+            k: 0.4
+            shared_k: true
+            v_th: 0.25
         - name: linear
           params:
             out_features: 16
         - name: li
+          params:
+            k: 0.2
+            shared_k: true
     value_network:
       nodes:
         - name: linear
           params:
-            out_features: 128
+            out_features: 64
         - name: torch_activation
           params:
             activation: relu
         - name: linear
           params:
-            out_features: 128
+            out_features: 64
         - name: torch_activation
           params:
             activation: relu
@@ -48,7 +59,7 @@ agent:
     device: cpu
     policy:
       name: beta
-    rollouts: 128
+    rollouts: 64
     sequence_length: 8
     learning_epochs: 4
     mini_batches: 4
@@ -57,15 +68,10 @@ agent:
     value_loss_scale: 1.0
     kl_threshold: 0.02
     discount_factor: 0.99
-    gae_lambda: 0.95
+    gae_lambda: 0.99
     policy_learning_rate: 1e-3
     value_learning_rate: 1e-3
-    policy_learning_rate_scheduler: torch.optim.lr_scheduler.LinearLR
-    policy_learning_rate_scheduler_kwargs:
-      start_factor: 1.0
-      end_factor: 0.1
-      # One scheduler step per rollout: floor(5000000 / 128).
-      total_iters: 39062
+    policy_learning_rate_scheduler: null
     value_learning_rate_scheduler: null
     observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
     policy_grad_norm_clip: 0.5
@@ -75,6 +81,7 @@ agent:
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:
+      checkpoint_interval: 100000
       write_interval: 10000
 
 runner:
@@ -91,6 +98,6 @@ trainer:
   use_parallel: false
   eval_timesteps: 100000
   params:
-    timesteps: 5000000
+    timesteps: 3000000
     headless: true
     close_environment_at_exit: false

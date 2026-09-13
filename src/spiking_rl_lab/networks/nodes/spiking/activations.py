@@ -41,10 +41,9 @@ class LIFNode(BaseNode):
     class Config(BaseNode.Config):
         """LIF node configuration."""
 
-        dt: float = 0.001
-        tau_mem_inv: float = 400.0
-        learnable_tau: bool = True
-        shared_tau: bool = False
+        k: float = 0.4
+        learnable_k: bool = True
+        shared_k: bool = False
         v_leak: float = 0.0
         v_th: float = 1.0
         learnable_v_th: bool = False
@@ -53,12 +52,12 @@ class LIFNode(BaseNode):
         alpha: float = 100.0
 
         def validate(self) -> None:
-            """Validate the time step and learnable tau initialization."""
-            if not self.dt > 0.0:
-                msg = "dt must be positive"
+            """Validate the low-pass coefficient initialization."""
+            if not 0.0 <= self.k <= 1.0:
+                msg = "k must be between 0 and 1"
                 raise ValueError(msg)
-            if self.learnable_tau and not 0.0 < self.dt * self.tau_mem_inv < 1.0:
-                msg = "Learnable tau requires 0 < dt * tau_mem_inv < 1"
+            if self.learnable_k and not 0.0 < self.k < 1.0:
+                msg = "Learnable k requires 0 < k < 1"
                 raise ValueError(msg)
             if self.learnable_v_th and not self.v_th > self.v_reset + 1e-6:
                 msg = "Learnable v_th requires v_th > v_reset + 1e-6"
@@ -67,7 +66,7 @@ class LIFNode(BaseNode):
         def parameters(self) -> LIFBoxParameters:
             """Build Norse LIF box parameters."""
             return LIFBoxParameters(
-                tau_mem_inv=torch.as_tensor(self.tau_mem_inv),
+                tau_mem_inv=torch.as_tensor(self.k),
                 v_leak=torch.as_tensor(self.v_leak),
                 v_th=torch.as_tensor(self.v_th),
                 v_reset=torch.as_tensor(self.v_reset),
@@ -78,16 +77,15 @@ class LIFNode(BaseNode):
     def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
         """Initialize the node."""
         super().__init__(cfg, input_shape)
-        self._cell = snn.LIFBoxCell(p=cfg.parameters(), dt=cfg.dt)
+        self._cell = snn.LIFBoxCell(p=cfg.parameters(), dt=1.0)
         self.register_parameter("_tau_logit", None)
-        if cfg.learnable_tau:
-            k = cfg.dt * cfg.tau_mem_inv
-            tau_shape = (
+        if cfg.learnable_k:
+            k_shape = (
                 ()
-                if cfg.shared_tau
+                if cfg.shared_k
                 else (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
             )
-            self._tau_logit = torch.nn.Parameter(torch.logit(torch.full(tau_shape, k)))
+            self._tau_logit = torch.nn.Parameter(torch.logit(torch.full(k_shape, cfg.k)))
         self.register_parameter("_v_th_raw", None)
         if cfg.learnable_v_th:
             threshold_shape = (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
@@ -118,9 +116,7 @@ class LIFNode(BaseNode):
     ) -> tuple[torch.Tensor, ListState]:
         """Run the LIF cell for one step."""
         if self._tau_logit is not None:
-            self._cell.p = self._cell.p._replace(
-                tau_mem_inv=self._tau_logit.sigmoid() / self._cell.dt,
-            )
+            self._cell.p = self._cell.p._replace(tau_mem_inv=self._tau_logit.sigmoid())
         if self._v_th_raw is not None:
             self._cell.p = self._cell.p._replace(
                 v_th=self._cell.p.v_reset + torch.nn.functional.softplus(self._v_th_raw) + 1e-6,
@@ -137,41 +133,39 @@ class LINode(BaseNode):
     class Config(BaseNode.Config):
         """LI node configuration."""
 
-        dt: float = 0.001
-        tau_mem_inv: float = 200.0
-        learnable_tau: bool = True
-        shared_tau: bool = False
+        k: float = 0.2
+        learnable_k: bool = True
+        shared_k: bool = False
         v_leak: float = 0.0
 
         def validate(self) -> None:
-            """Validate the time step and learnable tau initialization."""
-            if not self.dt > 0.0:
-                msg = "dt must be positive"
+            """Validate the low-pass coefficient initialization."""
+            if not 0.0 <= self.k <= 1.0:
+                msg = "k must be between 0 and 1"
                 raise ValueError(msg)
-            if self.learnable_tau and not 0.0 < self.dt * self.tau_mem_inv < 1.0:
-                msg = "Learnable tau requires 0 < dt * tau_mem_inv < 1"
+            if self.learnable_k and not 0.0 < self.k < 1.0:
+                msg = "Learnable k requires 0 < k < 1"
                 raise ValueError(msg)
 
         def parameters(self) -> LIBoxParameters:
             """Build Norse LI box parameters."""
             return LIBoxParameters(
-                tau_mem_inv=torch.as_tensor(self.tau_mem_inv),
+                tau_mem_inv=torch.as_tensor(self.k),
                 v_leak=torch.as_tensor(self.v_leak),
             )
 
     def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
         """Initialize the node."""
         super().__init__(cfg, input_shape)
-        self._cell = snn.LIBoxCell(p=cfg.parameters(), dt=cfg.dt)
+        self._cell = snn.LIBoxCell(p=cfg.parameters(), dt=1.0)
         self.register_parameter("_tau_logit", None)
-        if cfg.learnable_tau:
-            k = cfg.dt * cfg.tau_mem_inv
-            tau_shape = (
+        if cfg.learnable_k:
+            k_shape = (
                 ()
-                if cfg.shared_tau
+                if cfg.shared_k
                 else (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
             )
-            self._tau_logit = torch.nn.Parameter(torch.logit(torch.full(tau_shape, k)))
+            self._tau_logit = torch.nn.Parameter(torch.logit(torch.full(k_shape, cfg.k)))
 
     @property
     def output_shape(self) -> TensorShape:
@@ -195,8 +189,6 @@ class LINode(BaseNode):
     ) -> tuple[torch.Tensor, ListState]:
         """Run the LI cell for one step."""
         if self._tau_logit is not None:
-            self._cell.p = self._cell.p._replace(
-                tau_mem_inv=self._tau_logit.sigmoid() / self._cell.dt,
-            )
+            self._cell.p = self._cell.p._replace(tau_mem_inv=self._tau_logit.sigmoid())
         outputs, next_state = self._cell(inputs, state=state)
         return outputs, next_state
