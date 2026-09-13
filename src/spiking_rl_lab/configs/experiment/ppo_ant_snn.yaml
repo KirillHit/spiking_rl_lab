@@ -71,7 +71,13 @@ agent:
     gae_lambda: 0.99
     policy_learning_rate: 1e-3
     value_learning_rate: 1e-3
-    policy_learning_rate_scheduler: null
+    policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
+    policy_learning_rate_scheduler_kwargs:
+      kl_threshold: 0.01
+      kl_factor: 2.0
+      lr_factor: 1.5
+      min_lr: 1e-5
+      max_lr: 1e-3
     value_learning_rate_scheduler: null
     observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
     policy_grad_norm_clip: 0.5

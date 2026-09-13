@@ -12,6 +12,7 @@ import torch
 from gymnasium.spaces import Discrete
 from gymnasium.spaces.utils import flatdim
 from skrl.memories.torch import RandomMemory
+from skrl.resources.schedulers.torch import KLAdaptiveLR
 
 from spiking_rl_lab.agents.a2c.a2c import _as_sequences, compute_gae
 from spiking_rl_lab.agents.base_agent import BaseAgent
@@ -339,7 +340,7 @@ class PPO(BaseAgent):
         self,
         batch: _SequenceBatch,
         indices: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, float]:
         """Replay one group of recurrent sequences and compute PPO losses."""
         observations = batch.observations[:, indices]
         dones = batch.dones[:, indices]
@@ -372,7 +373,7 @@ class PPO(BaseAgent):
         distribution = self.policy.distribution(policy_outputs)
         log_ratio = distribution.log_prob(actions) - old_log_prob
         ratio = log_ratio.exp()
-        self._approximate_kl = (torch.expm1(log_ratio) - log_ratio).mean().item()
+        approximate_kl = (torch.expm1(log_ratio) - log_ratio).mean().item()
         surrogate = advantages * ratio
         clipped = advantages * ratio.clamp(1 - self.cfg.ratio_clip, 1 + self.cfg.ratio_clip)
         policy_loss = -torch.minimum(surrogate, clipped).mean()
@@ -406,18 +407,22 @@ class PPO(BaseAgent):
         if layer_activity:
             self.track_data("Activity / Mean", mean_activity.item())
 
-        return policy_loss, value_loss, entropy_loss, activity_loss
+        return policy_loss, value_loss, entropy_loss, activity_loss, approximate_kl
 
-    def _optimize(self, loss: torch.Tensor) -> None:
-        """Apply one independently clipped actor and critic gradient step."""
+    def _optimize_policy(self, loss: torch.Tensor) -> None:
+        """Apply one clipped actor gradient step."""
         self.policy_optimizer.zero_grad(set_to_none=True)
-        self.value_optimizer.zero_grad(set_to_none=True)
         loss.backward()
         if self.cfg.policy_grad_norm_clip:
             torch.nn.utils.clip_grad_norm_(self._policy_parameters, self.cfg.policy_grad_norm_clip)
+        self.policy_optimizer.step()
+
+    def _optimize_value(self, loss: torch.Tensor) -> None:
+        """Apply one clipped critic gradient step."""
+        self.value_optimizer.zero_grad(set_to_none=True)
+        loss.backward()
         if self.cfg.value_grad_norm_clip:
             torch.nn.utils.clip_grad_norm_(self._value_parameters, self.cfg.value_grad_norm_clip)
-        self.policy_optimizer.step()
         self.value_optimizer.step()
 
     def update(self, *, timestep: int, timesteps: int) -> None:
@@ -450,11 +455,13 @@ class PPO(BaseAgent):
                 self.cfg.mini_batches
             )
             for indices in groups:
-                policy_loss, value_loss, entropy_loss, activity_loss = self._loss(batch, indices)
-                if self.cfg.kl_threshold and self._approximate_kl > self.cfg.kl_threshold:
-                    stop = True
-                    break
-                self._optimize(policy_loss + value_loss + entropy_loss + activity_loss)
+                policy_loss, value_loss, entropy_loss, activity_loss, approximate_kl = self._loss(
+                    batch, indices
+                )
+                stop = bool(self.cfg.kl_threshold and approximate_kl > self.cfg.kl_threshold)
+                if not stop:
+                    self._optimize_policy(policy_loss + entropy_loss + activity_loss)
+                self._optimize_value(value_loss)
                 losses.append(
                     torch.stack(
                         [
@@ -465,16 +472,19 @@ class PPO(BaseAgent):
                         ]
                     )
                 )
+                if stop:
+                    break
             if stop:
                 break
-
-        self.track_data("Learning / KL divergence", self._approximate_kl)
-        if losses:
-            policy_loss, value_loss, entropy_loss, activity_loss = torch.stack(losses).mean(0)
+        self.track_data("Learning / KL divergence", approximate_kl)
+        self.track_data("Learning / Policy updates", len(losses) - int(stop))
+        self.track_data("Learning / Value updates", len(losses))
+        self.track_data("Learning / KL early stop", float(stop))
+        policy_loss, value_loss, entropy_loss, activity_loss = torch.stack(losses).mean(0)
 
         apply_collected_batch_norm_statistics(self.policy_network, self.value_network)
 
-        self._step_schedulers()
+        self._step_schedulers(approximate_kl)
 
         self.track_data("Loss / Policy loss", policy_loss.item())
         self.track_data("Loss / Value loss", value_loss.item())
@@ -491,8 +501,10 @@ class PPO(BaseAgent):
 
         self._reset_rollout()
 
-    def _step_schedulers(self) -> None:
+    def _step_schedulers(self, approximate_kl: float) -> None:
         """Advance learning-rate schedules once per rollout."""
         for scheduler in (self.policy_scheduler, self.value_scheduler):
-            if scheduler is not None:
+            if isinstance(scheduler, KLAdaptiveLR):
+                scheduler.step(approximate_kl)
+            elif scheduler is not None:
                 scheduler.step()
