@@ -19,6 +19,7 @@ from spiking_rl_lab.agents.builder import register_agent
 from spiking_rl_lab.agents.ppo.ppo_cfg import PPOConfig
 from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.validation import require_shape_fields
+from spiking_rl_lab.envs.observations import bootstrap_observations
 from spiking_rl_lab.networks.node_network import NodeNetwork
 from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape
 from spiking_rl_lab.networks.state import (
@@ -266,13 +267,17 @@ class PPO(BaseAgent):
         if self.training:
             if self.cfg.rewards_shaper is not None:
                 rewards = self.cfg.rewards_shaper(rewards, timestep, timesteps)
-            if self.cfg.time_limit_bootstrap and truncated.any():
+            bootstrap = truncated & ~terminated
+            if self.cfg.time_limit_bootstrap and bootstrap.any():
+                terminal_observations = bootstrap_observations(
+                    next_observations, infos, observation_space=self.observation_space
+                )
                 next_inputs = torch.flatten(
-                    self._observation_preprocessor(next_observations, train=False), start_dim=1
+                    self._observation_preprocessor(terminal_observations, train=False), start_dim=1
                 )
                 with torch.no_grad():
                     next_values, _ = self.value_network(next_inputs, self._value_state)
-                rewards = rewards + self.cfg.discount_factor * next_values * truncated
+                rewards = rewards + self.cfg.discount_factor * next_values * bootstrap
 
             self.memory.add_samples(
                 observations=self._processed_observation,

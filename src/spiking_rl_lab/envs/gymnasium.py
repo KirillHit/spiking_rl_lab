@@ -48,6 +48,7 @@ class GymnasiumBackend(BaseEnvBackend):
                     self._cfg.id,
                     num_envs=self._cfg.n_envs,
                     vectorization_mode="sync",
+                    vector_kwargs={"autoreset_mode": gym.vector.AutoresetMode.SAME_STEP},
                     render_mode="human" if self._cfg.render else None,
                 )
         except Exception as exc:
