@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 import mlflow
 import optuna
 from flatten_dict import flatten
-from skrl.trainers.torch import ParallelTrainer, SequentialTrainer, Trainer
 from skrl.utils import set_seed
 
 from spiking_rl_lab.agents.builder import build_agent
@@ -28,6 +27,7 @@ from spiking_rl_lab.app.tracking import (
 )
 from spiking_rl_lab.core.exception import SpikingRLLabError, TrainerCreationError
 from spiking_rl_lab.envs.builder import build_env
+from spiking_rl_lab.trainers import Trainer
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -76,18 +76,11 @@ class Runner:
                 log_model_metadata(run, cfg.runner.output_dir)
                 log_artifact_if_exists(cfg.runner.output_dir / "run.log")
 
-    def evaluate(self, cfg: BaseConfig, checkpoint_path: Path | None = None) -> float:
+    def evaluate(self, cfg: BaseConfig) -> float:
         """Run the evaluation loop."""
-        eval_cfg = self._prepare_eval_config(cfg, checkpoint_path)
-
-        with self._trainer_context(eval_cfg) as trainer:
+        with self._trainer_context(cfg) as trainer:
             log.info("Starting evaluation...")
-            trainer.eval()
-            score = trainer.agents.last_tracking_metrics.get("Eval / Reward / Total reward_mean")
-
-        if score is None:
-            msg = "Evaluation finished without a tracked total reward metric"
-            raise SpikingRLLabError(msg)
+            score = trainer.evaluate()
 
         log.info("Evaluation mean reward: %.6g", score)
         return score
@@ -187,16 +180,18 @@ class Runner:
             with self._trainer_context(cfg) as trainer:
                 log.info("Starting training...")
                 trainer.train()
+                score = trainer.validation_score
 
             best_checkpoint = cfg.runner.output_dir / "checkpoints" / "best_agent.pt"
             if not best_checkpoint.exists():
                 msg = f"Best checkpoint was not found: {best_checkpoint}"
                 raise FileNotFoundError(msg)
 
-            return self.evaluate(cfg, checkpoint_path=best_checkpoint)
         except SpikingRLLabError:
             log.exception("Training failed!")
             raise
+        else:
+            return score
         finally:
             log_artifact_if_exists(cfg.runner.output_dir / "checkpoints" / "best_agent.pt")
 
@@ -221,8 +216,7 @@ class Runner:
             )
 
             try:
-                trainer_class = ParallelTrainer if cfg.trainer.use_parallel else SequentialTrainer
-                trainer = trainer_class(env=env, agents=agent, cfg=cfg.trainer.params)
+                trainer = Trainer(env=env, agents=agent, cfg=cfg.trainer.params)
             except Exception as exc:
                 msg = "Failed to create trainer"
                 raise TrainerCreationError(msg) from exc
@@ -258,27 +252,3 @@ class Runner:
         ts = datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d_%H-%M-%S")
         env_id = cfg.env.params.get("id", cfg.env.name)
         return f"{ts}_{env_id}_{cfg.agent.name}"
-
-    def _prepare_eval_config(
-        self,
-        cfg: BaseConfig,
-        checkpoint_path: Path | None = None,
-    ) -> BaseConfig:
-        """Create a config for evaluation without mutating the original one."""
-        trainer_params = {**cfg.trainer.params, "timesteps": cfg.trainer.eval_timesteps}
-        agent_params = {**cfg.agent.params}
-        experiment = dict(agent_params.get("experiment", {}))
-        experiment["write_interval"] = cfg.trainer.eval_timesteps
-        agent_params["experiment"] = experiment
-
-        return replace(
-            cfg,
-            agent=replace(cfg.agent, params=agent_params),
-            runner=replace(
-                cfg.runner,
-                checkpoint_path=checkpoint_path
-                if checkpoint_path is not None
-                else cfg.runner.checkpoint_path,
-            ),
-            trainer=replace(cfg.trainer, params=trainer_params),
-        )

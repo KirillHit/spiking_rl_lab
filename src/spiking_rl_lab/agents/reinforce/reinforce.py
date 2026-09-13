@@ -173,7 +173,7 @@ class Reinforce(BaseAgent):
         )
 
         dones = torch.logical_or(terminated, truncated)
-        self._hidden_states = self.policy_network.reset_state(self._hidden_states, dones)
+        self.reset_state(dones)
         if not self.training:
             return
 
@@ -189,6 +189,10 @@ class Reinforce(BaseAgent):
 
     def pre_interaction(self, *, timestep: int, timesteps: int) -> None:
         """Run the hook before environment interaction."""
+
+    def reset_state(self, dones: torch.Tensor) -> None:
+        """Reset recurrent state for completed environments."""
+        self._hidden_states = self.policy_network.reset_state(self._hidden_states, dones)
 
     def post_interaction(self, *, timestep: int, timesteps: int) -> None:
         """Update the policy as soon as the rollout storage is full."""

@@ -307,13 +307,17 @@ class A2C(BaseAgent):
             )
             self._next_observation = next_observations
 
-        self._policy_state = self.policy_network.reset_state(self._policy_state, dones)
-        self._value_state = self.value_network.reset_state(self._value_state, dones)
+        self.reset_state(dones)
         self._processed_observation = None
         self._current_value = None
 
     def pre_interaction(self, *, timestep: int, timesteps: int) -> None:
         """Prepare the agent before an environment interaction."""
+
+    def reset_state(self, dones: torch.Tensor) -> None:
+        """Reset recurrent state for completed environments."""
+        self._policy_state = self.policy_network.reset_state(self._policy_state, dones)
+        self._value_state = self.value_network.reset_state(self._value_state, dones)
 
     def post_interaction(self, *, timestep: int, timesteps: int) -> None:
         """Process the completed environment interaction."""

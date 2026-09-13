@@ -101,9 +101,10 @@ runner:
   dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
 
 trainer:
-  use_parallel: false
-  eval_timesteps: 100000
   params:
     timesteps: 3000000
     headless: true
     close_environment_at_exit: false
+    validation:
+      episodes: 10
+      min_interval: 50000

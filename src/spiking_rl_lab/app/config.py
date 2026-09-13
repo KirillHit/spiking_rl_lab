@@ -38,8 +38,6 @@ class RunnerConfig:
 class TrainerConfig:
     """Training settings."""
 
-    use_parallel: bool = True
-    eval_timesteps: int = 10000
     params: dict[str, Any] = field(default_factory=dict)
 
 
