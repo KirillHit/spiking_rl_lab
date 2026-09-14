@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 from contextlib import suppress
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from spiking_rl_lab.core.exception import EnvironmentCreationError
 from spiking_rl_lab.envs.base_env import BaseEnvBackend
@@ -28,6 +28,7 @@ class GymnasiumBackend(BaseEnvBackend):
         id: str
         render: bool = False
         n_envs: int = 1
+        kwargs: dict[str, Any] = field(default_factory=dict)
 
         def __post_init__(self) -> None:
             """Validate environment backend parameters."""
@@ -42,7 +43,11 @@ class GymnasiumBackend(BaseEnvBackend):
 
         try:
             if self._cfg.n_envs == 1:
-                env = gym.make(self._cfg.id, render_mode="human" if self._cfg.render else None)
+                env = gym.make(
+                    self._cfg.id,
+                    render_mode="human" if self._cfg.render else None,
+                    **self._cfg.kwargs,
+                )
             else:
                 env = gym.make_vec(
                     self._cfg.id,
@@ -50,6 +55,7 @@ class GymnasiumBackend(BaseEnvBackend):
                     vectorization_mode="sync",
                     vector_kwargs={"autoreset_mode": gym.vector.AutoresetMode.SAME_STEP},
                     render_mode="human" if self._cfg.render else None,
+                    **self._cfg.kwargs,
                 )
         except Exception as exc:
             msg = f"Failed to create Gymnasium environment '{self._cfg.id}': {exc}"

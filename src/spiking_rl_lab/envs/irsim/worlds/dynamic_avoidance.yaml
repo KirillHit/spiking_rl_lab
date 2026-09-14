@@ -1,0 +1,60 @@
+world:
+  height: 10
+  width: 10
+  step_time: 0.02
+  sample_time: 0.02
+  offset: [0, 0]
+  collision_mode: stop
+  control_mode: auto
+
+robot:
+  - kinematics: {name: diff}
+    shape: {name: circle, radius: 0.25}
+    state: [1, 5, 0]
+    goal: [9, 5, 0]
+    vel_min: [0, -2]
+    vel_max: [1, 2]
+    goal_threshold: 0.3
+    color: blue
+    sensors:
+      - type: lidar2d
+        range_min: 0
+        range_max: 6
+        angle_range: 6.283185
+        number: 36
+    plot:
+      show_goal: true
+      show_trajectory: true
+
+obstacle:
+  - number: 3
+    distribution: {name: manual}
+    kinematics: {name: omni}
+    shape: {name: circle, radius: 0.35}
+    state:
+      - [3, 2, 0]
+      - [5, 8, 0]
+      - [7, 2, 0]
+    goal:
+      - [3, 8, 0]
+      - [5, 2, 0]
+      - [7, 8, 0]
+    behavior: {name: dash, loop: true}
+    vel_min: [-0.7, -0.7]
+    vel_max: [0.7, 0.7]
+    goal_threshold: 0.2
+    color: orange
+
+  - number: 4
+    distribution: {name: manual}
+    shape:
+      - {name: rectangle, length: 10, width: 0.1}
+      - {name: rectangle, length: 10, width: 0.1}
+      - {name: rectangle, length: 10, width: 0.1}
+      - {name: rectangle, length: 10, width: 0.1}
+    state:
+      - [5, 0, 0]
+      - [5, 10, 0]
+      - [0, 5, 1.5708]
+      - [10, 5, 1.5708]
+    color: black

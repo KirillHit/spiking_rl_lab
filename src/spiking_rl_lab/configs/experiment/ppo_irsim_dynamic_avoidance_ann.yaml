@@ -1,0 +1,95 @@
+# @package _global_
+# PPO baseline for dynamic obstacle avoidance in IR-SIM.
+env:
+  name: gymnasium
+  params:
+    id: spiking_rl_lab.envs.irsim:IRSimDynamicAvoidance-v0
+    n_envs: 4
+    render: false
+    kwargs:
+      max_episode_steps: 2500
+
+agent:
+  name: ppo
+  params:
+    policy_network:
+      nodes:
+        - name: linear
+          params:
+            out_features: 128
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 128
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 4
+    value_network:
+      nodes:
+        - name: linear
+          params:
+            out_features: 128
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 128
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 1
+    device: cpu
+    policy:
+      name: beta
+    rollouts: 640
+    sequence_length: 8
+    learning_epochs: 4
+    mini_batches: 4
+    ratio_clip: 0.2
+    value_clip: 0.2
+    value_loss_scale: 1.0
+    kl_threshold: 0.02
+    discount_factor: 0.99
+    gae_lambda: 0.95
+    policy_learning_rate: 3e-4
+    value_learning_rate: 1e-3
+    policy_learning_rate_scheduler: null
+    value_learning_rate_scheduler: null
+    observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
+    policy_grad_norm_clip: 0.5
+    value_grad_norm_clip: 0.5
+    entropy_loss_scale: 1e-3
+    spike_activity_loss_scale: 0.0
+    time_limit_bootstrap: true
+    rewards_shaper: null
+    experiment:
+      checkpoint_interval: 100000
+      write_interval: 10000
+
+runner:
+  mode: demo
+  seed: 42
+  deterministic: true
+  experiment_name: ppo_irsim_dynamic_avoidance_ann
+  output_dir: ${hydra:runtime.output_dir}
+  checkpoint_path: runs/ppo_irsim_dynamic_avoidance_ann/spiking_rl_lab.envs.irsim:IRSimDynamicAvoidance-v0/2026-09-14_19-31-58_ppo/checkpoints/best_agent.pt
+  demo_fps: 50.0
+  dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
+  dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
+
+trainer:
+  params:
+    timesteps: 500000
+    headless: true
+    close_environment_at_exit: false
+    validation:
+      episodes: 10
+      min_interval: 50000
