@@ -46,6 +46,7 @@ runner:
   experiment_name: reinforce_cartpole_snn
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
+  demo_fps: 50.0
   dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
   dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
 

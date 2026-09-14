@@ -48,17 +48,20 @@ class Runner:
 
         set_seed(cfg.runner.seed, deterministic=cfg.runner.deterministic)
 
-        setup_mlflow(
-            cfg.runner.dagshub_repo_owner,
-            cfg.runner.dagshub_repo_name,
-            cfg.runner.experiment_name,
-        )
+        if cfg.runner.mode in (RunnerMode.train, RunnerMode.optimize):
+            setup_mlflow(
+                cfg.runner.dagshub_repo_owner,
+                cfg.runner.dagshub_repo_name,
+                cfg.runner.experiment_name,
+            )
 
         match cfg.runner.mode:
             case RunnerMode.train:
                 self.train(cfg)
             case RunnerMode.evaluate:
                 self.evaluate(cfg)
+            case RunnerMode.demo:
+                self.demo(cfg)
             case RunnerMode.optimize:
                 self.optimize(cfg)
             case _:
@@ -84,6 +87,26 @@ class Runner:
 
         log.info("Evaluation mean reward: %.6g", score)
         return score
+
+    def demo(self, cfg: BaseConfig) -> None:
+        """Demonstrate a checkpoint indefinitely in one rendered environment."""
+        if cfg.runner.checkpoint_path is None:
+            msg = "Demo mode requires runner.checkpoint_path"
+            raise TrainerCreationError(msg)
+        if cfg.runner.demo_fps <= 0:
+            msg = f"Demo FPS must be positive (got {cfg.runner.demo_fps})"
+            raise TrainerCreationError(msg)
+
+        demo_cfg = deepcopy(cfg)
+        demo_cfg.env.params["n_envs"] = 1
+        demo_cfg.env.params["render"] = True
+
+        try:
+            with self._trainer_context(demo_cfg) as trainer:
+                log.info("Starting demo. Press Ctrl+C to stop...")
+                trainer.demo(fps=demo_cfg.runner.demo_fps)
+        except KeyboardInterrupt:
+            log.info("Demo stopped by user.")
 
     def optimize(self, cfg: BaseConfig) -> None:
         """Run hyperparameter optimization."""

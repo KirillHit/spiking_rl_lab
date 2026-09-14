@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -53,6 +54,49 @@ class Trainer(SequentialTrainer):
     def evaluate(self) -> float:
         """Evaluate the agent for the configured number of episodes."""
         return self.validator.evaluate(agent=self.agents)
+
+    def demo(self, *, fps: float) -> None:
+        """Demonstrate the agent indefinitely without collecting training data."""
+        if self.env.num_envs != 1:
+            msg = "Demo mode requires exactly one environment"
+            raise RuntimeError(msg)
+
+        frame_period = 1.0 / fps
+        next_frame = time.monotonic()
+
+        agent = self.agents
+        agent.enable_training_mode(enabled=False)
+        observations, _ = self.env.reset()
+        states = self.env.state()
+
+        try:
+            while True:
+                with torch.no_grad():
+                    actions, _ = agent.act(
+                        observations,
+                        states,
+                        timestep=0,
+                        timesteps=0,
+                    )
+                    next_observations, _, terminated, truncated, _ = self.env.step(actions)
+                    next_states = self.env.state()
+
+                dones = (terminated | truncated).reshape(-1)
+                agent.reset_state(dones)
+                if dones.any():
+                    observations, _ = self.env.reset()
+                    states = self.env.state()
+                else:
+                    observations, states = next_observations, next_states
+
+                next_frame += frame_period
+                delay = next_frame - time.monotonic()
+                if delay > 0:
+                    time.sleep(delay)
+                else:
+                    next_frame = time.monotonic()
+        finally:
+            agent.enable_training_mode(enabled=True)
 
     def train(self) -> None:
         """Train the agent and run scheduled validation between interactions."""
