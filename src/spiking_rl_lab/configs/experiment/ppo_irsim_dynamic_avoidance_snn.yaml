@@ -94,7 +94,7 @@ agent:
 
 runner:
   mode: train
-  seed: 43
+  seed: 42
   deterministic: true
   experiment_name: ppo_irsim_dynamic_avoidance_snn
   output_dir: ${hydra:runtime.output_dir}
