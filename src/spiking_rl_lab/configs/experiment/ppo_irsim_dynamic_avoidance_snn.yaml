@@ -1,11 +1,13 @@
 # @package _global_
-# PPO with an SNN Beta policy and a feed-forward value network on Ant-v5.
+# PPO with an SNN Beta policy for dynamic obstacle avoidance in IR-SIM.
 env:
   name: gymnasium
   params:
-    id: Ant-v5
-    n_envs: 16
+    id: spiking_rl_lab.envs.irsim:IRSimDynamicAvoidance-v0
+    n_envs: 8
     render: false
+    kwargs:
+      max_episode_steps: 2500
 
 agent:
   name: ppo
@@ -34,7 +36,7 @@ agent:
             v_th: 0.25
         - name: linear
           params:
-            out_features: 16
+            out_features: 4
         - name: li
           params:
             k: 0.2
@@ -94,10 +96,10 @@ runner:
   mode: train
   seed: 43
   deterministic: true
-  experiment_name: ppo_ant_snn
+  experiment_name: ppo_irsim_dynamic_avoidance_snn
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
-  demo_fps: 20.0
+  demo_fps: 50.0
   dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
   dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
 

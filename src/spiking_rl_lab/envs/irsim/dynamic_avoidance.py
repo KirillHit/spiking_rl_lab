@@ -100,7 +100,7 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
     def close(self) -> None:
         """Close the underlying IR-SIM environment."""
         if self._sim is not None:
-            self._sim.end(ending_time=0)
+            self._sim.end(ending_time=0.001)
             self._sim = None
 
     def _create_simulator(self, seed: int | None) -> None:
