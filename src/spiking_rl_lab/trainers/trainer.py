@@ -114,6 +114,7 @@ class Trainer(SequentialTrainer):
             range(timesteps),
             disable=self.cfg.disable_progressbar,
             file=sys.stdout,
+            smoothing=0.01,
         )
         for timestep in progress:
             agent.pre_interaction(timestep=timestep, timesteps=timesteps)
