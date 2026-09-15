@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
     """Drive a differential robot to its goal through moving obstacles."""
 
+    GOAL_DISTANCE_LIMIT = 10.0
     PROGRESS_REWARD_SCALE = 2.0
     STEP_PENALTY = 0.002
     CLEARANCE_THRESHOLD = 0.6
@@ -136,7 +137,7 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
             high=np.concatenate(
                 (
                     np.full(lidar_beams, scan["range_max"], dtype=np.float32),
-                    np.array([np.inf, 1.0, 1.0], dtype=np.float32),
+                    np.array([self.GOAL_DISTANCE_LIMIT, 1.0, 1.0], dtype=np.float32),
                     velocity_max,
                 )
             ),
@@ -157,7 +158,7 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
         bearing = np.arctan2(goal_delta[1], goal_delta[0]) - state[2]
         navigation = np.array(
             [
-                distance,
+                min(distance, self.GOAL_DISTANCE_LIMIT),
                 np.sin(bearing),
                 np.cos(bearing),
                 velocity[0],
