@@ -77,18 +77,25 @@ class BatchNormNode(BaseNode):
         self._layer = layer_type(features, eps=cfg.eps, momentum=cfg.momentum)
         self._layer.register_parameter("bias", None)
         self._statistics_accumulator: _ChannelStatisticsAccumulator | None = None
+        self._collect_statistics = False
 
     @property
     def output_shape(self) -> TensorShape:
         """Return the unchanged input shape."""
         return self._input_shape
 
-    def enable_batch_norm_statistics_collection(self) -> None:
-        """Start accumulating input statistics without changing normalization."""
+    def start_batch_norm_statistics_collection(self) -> None:
+        """Start accumulating fresh statistics without changing normalization."""
         self._statistics_accumulator = _ChannelStatisticsAccumulator(self._layer.running_mean)
+        self._collect_statistics = True
+
+    def stop_batch_norm_statistics_collection(self) -> None:
+        """Stop accumulating while retaining the collected statistics."""
+        self._collect_statistics = False
 
     def apply_collected_batch_norm_statistics(self) -> None:
         """Apply one running-statistics update from all collected inputs."""
+        self._collect_statistics = False
         if self._statistics_accumulator is None:
             return
 
@@ -115,7 +122,7 @@ class BatchNormNode(BaseNode):
         state: ListState | None = None,
     ) -> tuple[torch.Tensor, ListState | None]:
         """Normalize without mutating buffers, regardless of the module mode."""
-        if self._statistics_accumulator is not None:
+        if self._collect_statistics and self._statistics_accumulator is not None:
             self._statistics_accumulator.update(inputs)
         return functional.batch_norm(
             inputs,

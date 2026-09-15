@@ -1,5 +1,5 @@
 # @package _global_
-# PPO with an SNN Beta policy and a feed-forward value network on Ant-v5.
+# PPO with an ANN Beta policy and a feed-forward value network on Ant-v5.
 env:
   name: gymnasium
   params:
@@ -12,33 +12,21 @@ agent:
   params:
     policy_network:
       nodes:
-        - name: population_code
-          params:
-            neurons_per_feature: 16
-            sigma: 0.3
         - name: linear
           params:
             out_features: 128
-        - name: lif
+        - name: torch_activation
           params:
-            k: 0.4
-            shared_k: true
-            v_th: 0.25
+            activation: relu
         - name: linear
           params:
             out_features: 128
-        - name: lif
+        - name: torch_activation
           params:
-            k: 0.4
-            shared_k: true
-            v_th: 0.25
+            activation: relu
         - name: linear
           params:
             out_features: 16
-        - name: li
-          params:
-            k: 0.2
-            shared_k: true
     value_network:
       nodes:
         - name: linear
@@ -66,24 +54,18 @@ agent:
     ratio_clip: 0.2
     value_clip: 0.0
     value_loss_scale: 1.0
-    kl_threshold: 0.04
+    kl_threshold: 0.02
     discount_factor: 0.99
     gae_lambda: 0.99
     policy_learning_rate: 1e-3
     value_learning_rate: 1e-3
-    policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
-    policy_learning_rate_scheduler_kwargs:
-      kl_threshold: 0.03
-      kl_factor: 1.4
-      lr_factor: 1.2
-      min_lr: 1e-5
-      max_lr: 1e-3
+    policy_learning_rate_scheduler: null
     value_learning_rate_scheduler: null
     observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
     policy_grad_norm_clip: 0.5
     value_grad_norm_clip: 0.5
     entropy_loss_scale: 5e-4
-    spike_activity_loss_scale: 0.025
+    spike_activity_loss_scale: 0.0
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:
@@ -94,7 +76,7 @@ runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_ant_snn
+  experiment_name: ppo_ant_ann
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
   demo_fps: 20.0
@@ -103,7 +85,7 @@ runner:
 
 trainer:
   params:
-    timesteps: 3000000
+    timesteps: 500000
     headless: true
     close_environment_at_exit: false
     validation:

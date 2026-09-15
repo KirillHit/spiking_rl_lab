@@ -36,11 +36,14 @@ from spiking_rl_lab.networks.statistics.activity import (
 )
 from spiking_rl_lab.networks.statistics.normalization import (
     apply_collected_batch_norm_statistics,
-    enable_batch_norm_statistics_collection,
+    collect_batch_norm_statistics,
+    has_batch_norm,
 )
 from spiking_rl_lab.policies.builder import build_policy
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from skrl.envs.wrappers.torch import Wrapper
     from skrl.memories.torch import Memory
 
@@ -344,7 +347,7 @@ class PPO(BaseAgent):
         self,
         batch: _SequenceBatch,
         indices: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, float]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Replay one group of recurrent sequences and compute PPO losses."""
         observations = batch.observations[:, indices]
         dones = batch.dones[:, indices]
@@ -375,9 +378,7 @@ class PPO(BaseAgent):
         advantages = batch.advantages[:, indices]
 
         distribution = self.policy.distribution(policy_outputs)
-        log_ratio = distribution.log_prob(actions) - old_log_prob
-        ratio = log_ratio.exp()
-        approximate_kl = (torch.expm1(log_ratio) - log_ratio).mean().item()
+        ratio = (distribution.log_prob(actions) - old_log_prob).exp()
         surrogate = advantages * ratio
         clipped = advantages * ratio.clamp(1 - self.cfg.ratio_clip, 1 + self.cfg.ratio_clip)
         policy_loss = -torch.minimum(surrogate, clipped).mean()
@@ -411,7 +412,40 @@ class PPO(BaseAgent):
         if layer_activity:
             self.track_data("Activity / Mean", mean_activity.item())
 
-        return policy_loss, value_loss, entropy_loss, activity_loss, approximate_kl
+        return policy_loss, value_loss, entropy_loss, activity_loss
+
+    @torch.no_grad()
+    def _estimate_kl(self, batch: _SequenceBatch) -> float:
+        """Estimate final-policy KL against rollout probabilities."""
+        policy_state = batch.policy_state
+        log_ratios = []
+        for step in range(self.cfg.sequence_length):
+            policy_outputs, policy_state = self.policy_network(
+                batch.observations[step], policy_state
+            )
+            distribution = self.policy.distribution(policy_outputs)
+            log_ratios.append(distribution.log_prob(batch.actions[step]) - batch.old_log_prob[step])
+            policy_state = self.policy_network.reset_state(policy_state, batch.dones[step])
+
+        log_ratio = torch.stack(log_ratios)
+        return (torch.expm1(log_ratio) - log_ratio).mean().item()
+
+    @torch.no_grad()
+    def _update_batch_norm_statistics(self, batch: _SequenceBatch) -> None:
+        """Update normalization statistics from one final-network rollout replay."""
+        if not has_batch_norm(self.policy_network, self.value_network):
+            return
+
+        policy_state = batch.policy_state
+        value_state = batch.value_state
+        with collect_batch_norm_statistics(self.policy_network, self.value_network):
+            for step in range(self.cfg.sequence_length):
+                _, policy_state = self.policy_network(batch.observations[step], policy_state)
+                _, value_state = self.value_network(batch.observations[step], value_state)
+                policy_state = self.policy_network.reset_state(policy_state, batch.dones[step])
+                value_state = self.value_network.reset_state(value_state, batch.dones[step])
+
+        apply_collected_batch_norm_statistics(self.policy_network, self.value_network)
 
     def _optimize_policy(self, loss: torch.Tensor) -> None:
         """Apply one clipped actor gradient step."""
@@ -428,6 +462,13 @@ class PPO(BaseAgent):
         if self.cfg.value_grad_norm_clip:
             torch.nn.utils.clip_grad_norm_(self._value_parameters, self.cfg.value_grad_norm_clip)
         self.value_optimizer.step()
+
+    def _mini_batch_groups(self, batch_size: int) -> Generator[torch.Tensor]:
+        """Yield shuffled mini-batch indices for every learning epoch."""
+        for _ in range(self.cfg.learning_epochs):
+            yield from torch.randperm(batch_size, device=self.device).tensor_split(
+                self.cfg.mini_batches
+            )
 
     def update(self, *, timestep: int, timesteps: int) -> None:
         """Update the policy and value networks from the collected rollout."""
@@ -450,46 +491,32 @@ class PPO(BaseAgent):
         )
         batch = self._build_sequence_batch(returns, advantages)
 
-        enable_batch_norm_statistics_collection(self.policy_network, self.value_network)
-
         losses = []
-        stop = False
-        for _ in range(self.cfg.learning_epochs):
-            groups = torch.randperm(batch.size, device=self.device).tensor_split(
-                self.cfg.mini_batches
+        for indices in self._mini_batch_groups(batch.size):
+            policy_loss, value_loss, entropy_loss, activity_loss = self._loss(batch, indices)
+            self._optimize_policy(policy_loss + entropy_loss + activity_loss)
+            self._optimize_value(value_loss)
+            losses.append(
+                torch.stack(
+                    [
+                        policy_loss.detach(),
+                        value_loss.detach(),
+                        entropy_loss.detach(),
+                        activity_loss.detach(),
+                    ]
+                )
             )
-            for indices in groups:
-                policy_loss, value_loss, entropy_loss, activity_loss, approximate_kl = self._loss(
-                    batch, indices
-                )
-                stop = bool(self.cfg.kl_threshold and approximate_kl > self.cfg.kl_threshold)
-                if not stop:
-                    self._optimize_policy(policy_loss + entropy_loss + activity_loss)
-                self._optimize_value(value_loss)
-                losses.append(
-                    torch.stack(
-                        [
-                            policy_loss.detach(),
-                            value_loss.detach(),
-                            entropy_loss.detach(),
-                            activity_loss.detach(),
-                        ]
-                    )
-                )
-                if stop:
-                    break
-            if stop:
+            approximate_kl = self._estimate_kl(batch)
+            if self.cfg.kl_threshold and approximate_kl > self.cfg.kl_threshold:
                 break
-        self.track_data("Learning / KL divergence", approximate_kl)
-        self.track_data("Learning / Policy updates", len(losses) - int(stop))
-        self.track_data("Learning / Value updates", len(losses))
-        self.track_data("Learning / KL early stop", float(stop))
-        policy_loss, value_loss, entropy_loss, activity_loss = torch.stack(losses).mean(0)
-
-        apply_collected_batch_norm_statistics(self.policy_network, self.value_network)
 
         self._step_schedulers(approximate_kl)
+        self._update_batch_norm_statistics(batch)
 
+        policy_loss, value_loss, entropy_loss, activity_loss = torch.stack(losses).mean(0)
+
+        self.track_data("Learning / KL divergence", approximate_kl)
+        self.track_data("Learning / Policy updates", len(losses))
         self.track_data("Loss / Policy loss", policy_loss.item())
         self.track_data("Loss / Value loss", value_loss.item())
         if self.cfg.spike_activity_loss_scale:

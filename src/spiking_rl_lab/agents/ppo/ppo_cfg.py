@@ -105,7 +105,7 @@ class PPOConfig(BaseAgent.Config):
     """Value loss coefficient."""
 
     kl_threshold: float = 0.0
-    """Stop optimization when approximate KL exceeds this value; zero disables."""
+    """Stop later epochs when full-rollout KL exceeds this value; zero disables."""
 
     def __post_init__(self) -> None:
         """Validate PPO hyperparameters."""

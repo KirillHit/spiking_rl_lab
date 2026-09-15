@@ -33,7 +33,7 @@ from spiking_rl_lab.networks.statistics.activity import (
 )
 from spiking_rl_lab.networks.statistics.normalization import (
     apply_collected_batch_norm_statistics,
-    enable_batch_norm_statistics_collection,
+    collect_batch_norm_statistics,
 )
 from spiking_rl_lab.policies.builder import build_policy
 
@@ -429,13 +429,12 @@ class A2C(BaseAgent):
             lambda_coefficient=self.cfg.gae_lambda,
         )
 
-        enable_batch_norm_statistics_collection(self.policy_network, self.value_network)
-
         batch = self._build_sequence_batch(returns, advantages)
-        policy_loss, value_loss, entropy_loss, activity_loss = self._loss(batch)
-        self.policy_optimizer.zero_grad(set_to_none=True)
-        self.value_optimizer.zero_grad(set_to_none=True)
-        (policy_loss + value_loss + entropy_loss + activity_loss).backward()
+        with collect_batch_norm_statistics(self.policy_network, self.value_network):
+            policy_loss, value_loss, entropy_loss, activity_loss = self._loss(batch)
+            self.policy_optimizer.zero_grad(set_to_none=True)
+            self.value_optimizer.zero_grad(set_to_none=True)
+            (policy_loss + value_loss + entropy_loss + activity_loss).backward()
 
         if self.cfg.policy_grad_norm_clip:
             torch.nn.utils.clip_grad_norm_(self._policy_parameters, self.cfg.policy_grad_norm_clip)
