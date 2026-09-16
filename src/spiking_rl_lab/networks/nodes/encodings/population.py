@@ -32,6 +32,8 @@ class PopulationCodeNode(BaseNode):
 
         neurons_per_feature: int = 8
         sigma: float = 0.3
+        learnable_mu: bool = False
+        learnable_sigma: bool = False
 
         def __post_init__(self) -> None:
             """Validate population coding parameters."""
@@ -43,10 +45,32 @@ class PopulationCodeNode(BaseNode):
         super().__init__(cfg, input_shape)
         dense_shape = require_shape("Node 'population_code' input", input_shape, DenseTensorShape)
         self._output_shape = TensorShape.dense(dense_shape.features * cfg.neurons_per_feature)
-        self.register_buffer(
-            "_centers",
-            torch.linspace(-1.0, 1.0, cfg.neurons_per_feature).view(1, 1, -1),
+        parameter_shape = (dense_shape.features, cfg.neurons_per_feature)
+        boundary_margin = 1.0 / cfg.neurons_per_feature
+        mu_centers = (
+            torch.linspace(
+                -1.0 + boundary_margin,
+                1.0 - boundary_margin,
+                cfg.neurons_per_feature,
+            )
+            .expand(parameter_shape)
+            .clone()
         )
+        self._mu_raw = torch.nn.Parameter(torch.atanh(mu_centers), requires_grad=cfg.learnable_mu)
+
+        sigma = torch.full(parameter_shape, cfg.sigma)
+        sigma_raw = sigma + torch.log(-torch.expm1(-sigma))
+        self._sigma_raw = torch.nn.Parameter(sigma_raw, requires_grad=cfg.learnable_sigma)
+
+    @property
+    def mu(self) -> torch.Tensor:
+        """Return the population centers."""
+        return torch.tanh(self._mu_raw)
+
+    @property
+    def sigma(self) -> torch.Tensor:
+        """Return positive population widths."""
+        return torch.nn.functional.softplus(self._sigma_raw)
 
     @property
     def output_shape(self) -> TensorShape:
@@ -60,5 +84,5 @@ class PopulationCodeNode(BaseNode):
     ) -> tuple[torch.Tensor, ListState | None]:
         """Encode inputs as flattened Gaussian population activities."""
         encoded_inputs = torch.tanh(inputs).unsqueeze(-1)
-        activities = torch.exp(-0.5 * ((encoded_inputs - self._centers) / self._cfg.sigma).square())
+        activities = torch.exp(-0.5 * ((encoded_inputs - self.mu) / self.sigma).square())
         return activities.flatten(start_dim=1), None
