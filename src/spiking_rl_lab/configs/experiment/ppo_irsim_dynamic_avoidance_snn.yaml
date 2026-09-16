@@ -4,7 +4,7 @@ env:
   name: gymnasium
   params:
     id: spiking_rl_lab.envs.irsim:IRSimDynamicAvoidance-v0
-    n_envs: 8
+    n_envs: 4
     render: false
     kwargs:
       max_episode_steps: 1000
@@ -18,29 +18,33 @@ agent:
           params:
             neurons_per_feature: 16
             sigma: 0.3
+            learnable_mu: true
+            learnable_sigma: true
         - name: linear
           params:
             out_features: 128
         - name: lif
           params:
-            k: 0.4
-            shared_k: true
+            k: 0.2
             v_th: 0.25
+            shared_k: false
+            learnable_v_th: true
         - name: linear
           params:
             out_features: 128
         - name: lif
           params:
-            k: 0.4
-            shared_k: true
+            k: 0.2
             v_th: 0.25
+            shared_k: false
+            learnable_v_th: true
         - name: linear
           params:
             out_features: 4
         - name: li
           params:
             k: 0.2
-            shared_k: true
+            shared_k: false
     value_network:
       nodes:
         - name: linear
@@ -61,8 +65,8 @@ agent:
     device: cpu
     policy:
       name: beta
-    rollouts: 64
-    sequence_length: 8
+    rollouts: 256
+    sequence_length: 32
     learning_epochs: 4
     mini_batches: 4
     ratio_clip: 0.2

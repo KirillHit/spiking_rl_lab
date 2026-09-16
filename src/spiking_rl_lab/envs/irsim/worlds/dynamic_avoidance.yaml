@@ -20,8 +20,8 @@ robot:
       - type: lidar2d
         range_min: 0
         range_max: 8
-        angle_range: 3.490659
-        number: 36
+        angle_range: 6.283185
+        number: 72
     plot:
       show_goal: true
       show_trajectory: true
