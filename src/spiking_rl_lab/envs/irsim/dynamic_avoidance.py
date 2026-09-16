@@ -18,10 +18,11 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
 
     GOAL_DISTANCE_LIMIT = 10.0
     PROGRESS_REWARD_SCALE = 2.0
-    STEP_PENALTY = 0.002
+    STEP_PENALTY = 0.005
     CLEARANCE_THRESHOLD = 0.6
     CLEARANCE_PENALTY_SCALE = 0.04
     ANGULAR_VELOCITY_PENALTY_SCALE = 0.002
+    ANGULAR_VELOCITY_CHANGE_PENALTY_SCALE = 0.004
     SUCCESS_REWARD = 20.0
     COLLISION_PENALTY = 20.0
 
@@ -46,6 +47,7 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
         )
         self._sim: EnvBase | None = None
         self._previous_distance = 0.0
+        self._previous_angular_velocity = 0.0
         self._create_simulator(seed=None)
 
     def reset(
@@ -62,6 +64,7 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
             self._sim.reset(random=True)
 
         self._previous_distance = self._distance_to_goal()
+        self._previous_angular_velocity = 0.0
         return self._observation(), self._info()
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
@@ -87,6 +90,7 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
             collided=robot.collision,
         )
         self._previous_distance = distance
+        self._previous_angular_velocity = float(command[1])
 
         if self.render_mode == "human":
             self.render()
@@ -196,6 +200,9 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
             - self.CLEARANCE_PENALTY_SCALE * clearance_penalty
         )
         reward -= self.ANGULAR_VELOCITY_PENALTY_SCALE * abs(float(action[1]))
+        reward -= self.ANGULAR_VELOCITY_CHANGE_PENALTY_SCALE * abs(
+            float(action[1]) - self._previous_angular_velocity
+        )
         if arrived:
             reward += self.SUCCESS_REWARD
         if collided:
