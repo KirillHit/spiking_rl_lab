@@ -7,7 +7,7 @@ env:
     n_envs: 8
     render: false
     kwargs:
-      max_episode_steps: 2500
+      max_episode_steps: 1000
 
 agent:
   name: ppo
@@ -99,13 +99,13 @@ runner:
   experiment_name: ppo_irsim_dynamic_avoidance_snn
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
-  demo_fps: 50.0
+  demo_fps: 20.0
   dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
   dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
 
 trainer:
   params:
-    timesteps: 1000000
+    timesteps: 500000
     headless: true
     close_environment_at_exit: false
     validation:

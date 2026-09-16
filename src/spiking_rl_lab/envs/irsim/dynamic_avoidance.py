@@ -18,15 +18,15 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
 
     GOAL_DISTANCE_LIMIT = 10.0
     PROGRESS_REWARD_SCALE = 2.0
-    STEP_PENALTY = 0.005
+    STEP_PENALTY = 0.0125
     CLEARANCE_THRESHOLD = 0.6
     CLEARANCE_PENALTY_SCALE = 0.04
-    ANGULAR_VELOCITY_PENALTY_SCALE = 0.002
+    ANGULAR_VELOCITY_PENALTY_SCALE = 0.005
     ANGULAR_VELOCITY_CHANGE_PENALTY_SCALE = 0.004
     SUCCESS_REWARD = 20.0
     COLLISION_PENALTY = 20.0
 
-    metadata: ClassVar[dict[str, Any]] = {"render_modes": ["human"], "render_fps": 50}
+    metadata: ClassVar[dict[str, Any]] = {"render_modes": ["human"], "render_fps": 20}
 
     def __init__(
         self,

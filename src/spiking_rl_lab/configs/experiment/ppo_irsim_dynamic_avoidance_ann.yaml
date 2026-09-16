@@ -7,7 +7,7 @@ env:
     n_envs: 4
     render: false
     kwargs:
-      max_episode_steps: 2500
+      max_episode_steps: 1000
 
 agent:
   name: ppo
@@ -75,13 +75,13 @@ agent:
       write_interval: 10000
 
 runner:
-  mode: demo
+  mode: train
   seed: 42
   deterministic: true
   experiment_name: ppo_irsim_dynamic_avoidance_ann
   output_dir: ${hydra:runtime.output_dir}
-  checkpoint_path: runs/ppo_irsim_dynamic_avoidance_ann/spiking_rl_lab.envs.irsim:IRSimDynamicAvoidance-v0/2026-09-14_19-31-58_ppo/checkpoints/best_agent.pt
-  demo_fps: 50.0
+  checkpoint_path: null
+  demo_fps: 20.0
   dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
   dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
 
