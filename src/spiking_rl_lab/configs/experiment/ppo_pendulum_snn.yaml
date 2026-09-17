@@ -52,6 +52,7 @@ agent:
         min_shape_offset: 1e-3
     rollouts: 64
     sequence_length: 8
+    state_burn_in: 32
     learning_epochs: 2
     mini_batches: 1
     ratio_clip: 0.2

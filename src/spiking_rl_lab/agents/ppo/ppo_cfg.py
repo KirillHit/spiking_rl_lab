@@ -41,6 +41,9 @@ class PPOConfig(BaseAgent.Config):
     sequence_length: int = 16
     """Transitions per independently replayed recurrent sequence."""
 
+    state_burn_in: int = 0
+    """Previous transitions replayed to reconstruct recurrent state before a rollout."""
+
     discount_factor: float = 0.99
     """Reward discount factor used to compute returns."""
 
@@ -124,6 +127,7 @@ class PPOConfig(BaseAgent.Config):
         require_minimum("kl_threshold", self.kl_threshold, minimum=0.0)
         require_minimum("rollouts", self.rollouts, minimum=1)
         require_minimum("sequence_length", self.sequence_length, minimum=1)
+        require_range("state_burn_in", self.state_burn_in, minimum=0, maximum=self.rollouts)
         if self.rollouts % self.sequence_length:
             msg = "rollouts must be divisible by sequence_length"
             raise ValueError(msg)

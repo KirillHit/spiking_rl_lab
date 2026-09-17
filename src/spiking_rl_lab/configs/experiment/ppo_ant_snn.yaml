@@ -65,6 +65,7 @@ agent:
       name: beta
     rollouts: 64
     sequence_length: 8
+    state_burn_in: 32
     learning_epochs: 4
     mini_batches: 4
     ratio_clip: 0.2
