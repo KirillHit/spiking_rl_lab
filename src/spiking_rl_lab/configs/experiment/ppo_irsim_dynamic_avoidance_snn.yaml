@@ -114,5 +114,5 @@ trainer:
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 10
-      min_interval: 50000
+      episodes: 12
+      min_interval: 20000

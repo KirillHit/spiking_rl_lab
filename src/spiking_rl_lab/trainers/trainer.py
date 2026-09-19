@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from skrl.agents.torch import Agent
     from skrl.envs.wrappers.torch import Wrapper
 
+    from spiking_rl_lab.trainers.validator import ValidationResult
+
 
 @dataclass(kw_only=True)
 class TrainerConfig(SequentialTrainerCfg):
@@ -51,9 +53,11 @@ class Trainer(SequentialTrainer):
         """Return the best validation score observed during training."""
         return self.validator.score
 
-    def evaluate(self) -> float:
+    def evaluate(self) -> None:
         """Evaluate the agent for the configured number of episodes."""
-        return self.validator.evaluate(agent=self.agents)
+        self._maximize_curriculum()
+        result = self.validator.evaluate(agent=self.agents)
+        result.log_console()
 
     def demo(self, *, fps: float) -> None:
         """Demonstrate the agent indefinitely without collecting training data."""
@@ -66,6 +70,7 @@ class Trainer(SequentialTrainer):
 
         agent = self.agents
         agent.enable_training_mode(enabled=False)
+        self._maximize_curriculum()
         observations, _ = self.env.reset()
         states = self.env.state()
 
@@ -106,6 +111,7 @@ class Trainer(SequentialTrainer):
 
         agent = self.agents
         agent.enable_training_mode(enabled=True)
+        self._reset_curriculum()
         observations, infos = self.env.reset()
         states = self.env.state()
 
@@ -166,20 +172,50 @@ class Trainer(SequentialTrainer):
             )
             agent.post_interaction(timestep=timestep, timesteps=timesteps)
 
-            if self.env.num_envs > 1:
-                observations, states = next_observations, next_states
-            elif terminated.any() or truncated.any():
+            observations, states = next_observations, next_states
+            if self.env.num_envs == 1 and (terminated.any() or truncated.any()):
                 with torch.no_grad():
                     observations, infos = self.env.reset()
                     states = self.env.state()
-            else:
-                observations, states = next_observations, next_states
 
             if validate:
-                observations, states = self.validator.validate(
+                result, observations, states = self.validator.validate(
                     agent=agent,
                     observations=observations,
                     states=states,
                     timestep=timestep,
                     timesteps=timesteps,
                 )
+                result.log_console(timestep + 1)
+                result.log_mlflow(timestep + 1)
+                if timestep + 1 < timesteps and result.validate():
+                    self._update_curriculum(result)
+
+    def _reset_curriculum(self) -> None:
+        """Reset curriculum before training."""
+        self._curriculum_call("reset_curriculum")
+
+    def _maximize_curriculum(self) -> None:
+        """Maximize curriculum difficulty for evaluation."""
+        self._curriculum_call("maximize_curriculum")
+
+    def _update_curriculum(self, result: ValidationResult) -> None:
+        """Update curriculum after validation."""
+        updates = self._curriculum_call("update_curriculum", result)
+        if updates and any(updates):
+            self.validator.reset_progress_reference()
+
+    def _curriculum_call(self, method: str, *args: object) -> tuple[object, ...] | None:
+        """Call a curriculum capability on every underlying Gymnasium environment."""
+        if self.env.num_envs > 1:
+            supported = self.env.call("has_wrapper_attr", method)
+            if not any(supported):
+                return None
+            if not all(supported):
+                msg = f"Curriculum capability '{method}' is only available on some environments"
+                raise RuntimeError(msg)
+            return self.env.call(method, *args)
+
+        if not self.env.has_wrapper_attr(method):
+            return None
+        return (self.env.get_wrapper_attr(method)(*args),)

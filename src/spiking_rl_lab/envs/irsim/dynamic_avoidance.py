@@ -9,11 +9,15 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
+from spiking_rl_lab.envs.curriculum import Curriculum
+
 if TYPE_CHECKING:
     from irsim.env import EnvBase
 
+    from spiking_rl_lab.trainers.validator import ValidationResult
 
-class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
+
+class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray], Curriculum):
     """Drive a differential robot to its goal through moving obstacles."""
 
     GOAL_DISTANCE_LIMIT = 10.0
@@ -25,6 +29,8 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
     ANGULAR_VELOCITY_CHANGE_PENALTY_SCALE = 0.004
     SUCCESS_REWARD = 20.0
     COLLISION_PENALTY = 20.0
+    SUCCESS_THRESHOLD = 0.8
+    DIFFICULTY_STEP = 0.2
 
     metadata: ClassVar[dict[str, Any]] = {"render_modes": ["human"], "render_fps": 20}
 
@@ -48,7 +54,32 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
         self._sim: EnvBase | None = None
         self._previous_distance = 0.0
         self._previous_angular_velocity = 0.0
+        self._difficulty = 1.0
         self._create_simulator(seed=None)
+
+    def reset_curriculum(self) -> None:
+        """Start training without random obstacles."""
+        self._difficulty = 0.0
+
+    def update_curriculum(self, result: ValidationResult) -> bool:
+        """Advance difficulty when validation success reaches the required rate."""
+        if self._difficulty >= 1.0:
+            return False
+
+        successes = result.metrics.get("success")
+        if not successes:
+            msg = "Validation result has no curriculum metric 'success'"
+            raise RuntimeError(msg)
+        success_rate = sum(float(success) for success in successes) / len(successes)
+        if success_rate < self.SUCCESS_THRESHOLD:
+            return False
+
+        self._difficulty = min(1.0, self._difficulty + self.DIFFICULTY_STEP)
+        return True
+
+    def maximize_curriculum(self) -> None:
+        """Use the complete obstacle scene for evaluation and demonstration."""
+        self._difficulty = 1.0
 
     def reset(
         self,
@@ -57,12 +88,13 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
         options: dict[str, Any] | None = None,
     ) -> tuple[np.ndarray, dict[str, Any]]:
         """Reset the scenario and return its initial observation."""
-        super().reset(seed=seed)
+        super().reset(seed=seed, options=options)
         if self._sim is None or seed is not None:
             self._create_simulator(seed)
         else:
             self._sim.reset(random=True)
 
+        self._apply_difficulty(self._difficulty)
         self._previous_distance = self._distance_to_goal()
         self._previous_angular_velocity = 0.0
         return self._observation(), self._info()
@@ -148,6 +180,18 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
             dtype=np.float32,
         )
 
+    def _apply_difficulty(self, difficulty: float) -> None:
+        """Reduce the freshly reset full scene to the requested difficulty."""
+        delete_ids: list[int] = []
+        for group_name in ("dynamic_sfm", "dynamic_rvo", "static_random"):
+            objects = self._sim.get_group_by_name(group_name)
+            keep_count = int(len(objects) * difficulty)
+            delete_ids.extend(obj.id for obj in objects[keep_count:])
+
+        if delete_ids:
+            self._sim.delete_objects(delete_ids)
+        self._sim.refresh()
+
     def _observation(self) -> np.ndarray:
         """Build a robot-centric observation from LiDAR, goal, and velocity."""
         robot = self._sim.robot
@@ -216,4 +260,5 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray]):
             "distance_to_goal": self._distance_to_goal(),
             "success": bool(robot.arrive),
             "collision": bool(robot.collision),
+            "difficulty": self._difficulty,
         }

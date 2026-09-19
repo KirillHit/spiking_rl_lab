@@ -79,14 +79,11 @@ class Runner:
                 log_model_metadata(run, cfg.runner.output_dir)
                 log_artifact_if_exists(cfg.runner.output_dir / "run.log")
 
-    def evaluate(self, cfg: BaseConfig) -> float:
+    def evaluate(self, cfg: BaseConfig) -> None:
         """Run the evaluation loop."""
         with self._trainer_context(cfg) as trainer:
             log.info("Starting evaluation...")
-            score = trainer.evaluate()
-
-        log.info("Evaluation mean reward: %.6g", score)
-        return score
+            trainer.evaluate()
 
     def demo(self, cfg: BaseConfig) -> None:
         """Demonstrate a checkpoint indefinitely in one rendered environment."""
