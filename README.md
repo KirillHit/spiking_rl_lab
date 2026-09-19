@@ -14,26 +14,20 @@ Requirements:
 - Python 3.12 or newer
 - [uv](https://docs.astral.sh/uv/)
 
-Install the locked environment and launch the default CartPole experiment:
+Install the locked environment and launch an experiment:
 
 ```bash
 git clone --recurse-submodules https://github.com/KirillHit/spiking_rl_lab.git
 cd spiking_rl_lab
 uv sync
-uv run spiking-rl-lab
-```
-
-Launch a retained experiment configuration:
-
-```bash
-uv run spiking-rl-lab experiment=reinforce_cartpole_ann
+uv run spiking-rl-lab experiment=ppo_pendulum_snn
 ```
 
 Hydra overrides can be combined:
 
 ```bash
 uv run spiking-rl-lab \
-  experiment=reinforce_cartpole_ann \
+  experiment=ppo_pendulum_snn \
   runner.seed=7 \
   trainer.params.timesteps=50000
 ```

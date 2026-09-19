@@ -1,7 +1,0 @@
-params:
-  timesteps: 20000
-  headless: true
-  close_environment_at_exit: false
-  validation:
-    episodes: 20
-    min_interval: 50000

@@ -1,5 +1,0 @@
-name: gymnasium
-params:
-  id: CartPole-v1
-  n_envs: 4
-  render: false

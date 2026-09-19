@@ -1,11 +1,6 @@
 defaults:
   - base_config
-  - agent: null
-  - env: null
-  - optuna: null
-  - runner: null
-  - trainer: null
-  - experiment: reinforce_cartpole_snn
+  - experiment: null
   - override hydra/job_logging: colorlog
   - _self_
 

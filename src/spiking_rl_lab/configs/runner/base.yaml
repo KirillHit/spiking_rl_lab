@@ -1,9 +1,0 @@
-mode: train # train, optimize, evaluate
-seed: 42
-deterministic: true
-experiment_name: test
-output_dir: ${hydra:runtime.output_dir}
-checkpoint_path: null
-demo_fps: 20.0
-dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
-dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}

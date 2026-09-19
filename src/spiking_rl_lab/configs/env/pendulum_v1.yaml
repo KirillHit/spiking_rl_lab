@@ -1,5 +1,0 @@
-name: gymnasium
-params:
-  id: Pendulum-v1
-  n_envs: 1
-  render: true

@@ -1,5 +1,0 @@
-name: gymnasium
-params:
-  id: Ant-v5
-  n_envs: 8
-  render: true
