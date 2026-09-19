@@ -30,6 +30,7 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray], Curriculum):
     SUCCESS_REWARD = 20.0
     COLLISION_PENALTY = 20.0
     SUCCESS_THRESHOLD = 0.8
+    MIN_DIFFICULTY = 0.2
     DIFFICULTY_STEP = 0.2
 
     metadata: ClassVar[dict[str, Any]] = {"render_modes": ["human"], "render_fps": 20}
@@ -58,8 +59,8 @@ class IRSimDynamicAvoidance(gym.Env[np.ndarray, np.ndarray], Curriculum):
         self._create_simulator(seed=None)
 
     def reset_curriculum(self) -> None:
-        """Start training without random obstacles."""
-        self._difficulty = 0.0
+        """Start training at the minimum difficulty."""
+        self._difficulty = self.MIN_DIFFICULTY
 
     def update_curriculum(self, result: ValidationResult) -> bool:
         """Advance difficulty when validation success reaches the required rate."""
