@@ -92,5 +92,5 @@ trainer:
     close_environment_at_exit: false
     validation:
       episodes: 10
-      min_interval: 50000
-      max_interval: 100000
+      min_interval: 20000
+      max_interval: 50000

@@ -98,12 +98,12 @@ agent:
       write_interval: 10000
 
 runner:
-  mode: train
+  mode: demo
   seed: 42
   deterministic: true
   experiment_name: ppo_irsim_dynamic_avoidance_snn
   output_dir: ${hydra:runtime.output_dir}
-  checkpoint_path: null
+  checkpoint_path: best_agent_i2.pt
   demo_fps: 20.0
   dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
   dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
@@ -116,4 +116,4 @@ trainer:
     validation:
       episodes: 20
       min_interval: 20000
-      max_interval: 100000
+      max_interval: 50000
