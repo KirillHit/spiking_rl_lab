@@ -542,6 +542,32 @@ class PPO(BaseAgent):
 
         apply_collected_batch_norm_statistics(self.policy_network, self.value_network)
 
+    @torch.no_grad()
+    def _track_value_statistics(self, batch: _SequenceBatch) -> None:
+        """Track critic fit and value-target statistics over the complete rollout."""
+        value_state = batch.value_state
+        predicted_values = []
+        for step in range(self.cfg.sequence_length):
+            values, value_state = self.value_network(batch.observations[step], value_state)
+            predicted_values.append(values)
+            value_state = self.value_network.reset_state(value_state, batch.dones[step])
+
+        predictions = torch.stack(predicted_values)
+        targets = batch.returns
+        target_variance = targets.var(unbiased=False)
+        residual_variance = (targets - predictions).var(unbiased=False)
+        explained_variance = 1 - residual_variance / target_variance.clamp_min(
+            torch.finfo(targets.dtype).eps
+        )
+
+        self.track_data("Value / Explained variance", explained_variance.item())
+        self.track_data("Value / Target mean", targets.mean().item())
+        self.track_data("Value / Target std", targets.std(unbiased=False).item())
+        self.track_data("Value / Target min", targets.min().item())
+        self.track_data("Value / Target max", targets.max().item())
+        self.track_data("Value / Prediction mean", predictions.mean().item())
+        self.track_data("Value / Prediction std", predictions.std(unbiased=False).item())
+
     def _optimize_policy(self, loss: torch.Tensor) -> None:
         """Apply one clipped actor gradient step."""
         self.policy_optimizer.zero_grad(set_to_none=True)
@@ -615,6 +641,10 @@ class PPO(BaseAgent):
         if has_batch_norm(self.policy_network, self.value_network):
             self._update_batch_norm_statistics(batch)
             replay = self._replay_rollout(rollout)
+            batch.policy_state = replay.sequence_policy_state
+            batch.value_state = replay.sequence_value_state
+
+        self._track_value_statistics(batch)
 
         self._policy_state = replay.policy_state
         self._value_state = replay.value_state
