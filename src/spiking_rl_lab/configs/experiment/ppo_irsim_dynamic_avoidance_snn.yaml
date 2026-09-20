@@ -116,3 +116,4 @@ trainer:
     validation:
       episodes: 20
       min_interval: 20000
+      max_interval: 100000

@@ -77,12 +77,20 @@ class ValidationConfig:
 
     episodes: int = 20
     min_interval: int = 50000
+    max_interval: int = 100000
     disable_progressbar: bool = False
 
     def __post_init__(self) -> None:
         """Reject invalid validation settings."""
         require_positive("episodes", self.episodes)
         require_positive("min_interval", self.min_interval)
+        require_positive("max_interval", self.max_interval)
+        if self.max_interval < self.min_interval:
+            msg = (
+                f"max_interval must be >= min_interval "
+                f"(got {self.max_interval} < {self.min_interval})"
+            )
+            raise ValueError(msg)
 
 
 class Validator:
@@ -122,7 +130,10 @@ class Validator:
                 self._best_train_score = train_score
                 self._train_improved = True
 
-        due = self._train_improved and step - self._last_validation_step >= self._cfg.min_interval
+        elapsed = step - self._last_validation_step
+        due = elapsed >= self._cfg.max_interval or (
+            self._train_improved and elapsed >= self._cfg.min_interval
+        )
         return (due and rollout_complete) or step == timesteps
 
     def validate(
