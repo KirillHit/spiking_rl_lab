@@ -16,18 +16,33 @@ agent:
           params:
             neurons_per_feature: 16
             sigma: 0.3
+            learnable_mu: true
+            learnable_sigma: true
         - name: linear
           params:
-            out_features: 64
+            out_features: 128
         - name: lif
+          params:
+            k: 0.4
+            v_th: 0.25
+            shared_k: false
+            learnable_v_th: true
         - name: linear
           params:
-            out_features: 64
+            out_features: 128
         - name: lif
+          params:
+            k: 0.4
+            v_th: 0.25
+            shared_k: false
+            learnable_v_th: true
         - name: linear
           params:
             out_features: 2
         - name: li
+          params:
+            k: 0.2
+            shared_k: false
     value_network:
       nodes:
         - name: linear
@@ -48,31 +63,36 @@ agent:
     device: cpu
     policy:
       name: beta
-      params:
-        min_shape_offset: 1e-3
     rollouts: 64
     sequence_length: 8
     state_burn_in: 32
-    learning_epochs: 2
-    mini_batches: 1
+    learning_epochs: 4
+    mini_batches: 4
     ratio_clip: 0.2
-    value_clip: 0.2
+    value_clip: 0.0
     value_loss_scale: 1.0
-    kl_threshold: 0.0
+    kl_threshold: 0.06
     discount_factor: 0.99
     gae_lambda: 0.99
-    policy_learning_rate: 1.5e-3
+    policy_learning_rate: 1e-3
     value_learning_rate: 1e-3
-    policy_learning_rate_scheduler: null
+    policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
+    policy_learning_rate_scheduler_kwargs:
+      kl_threshold: 0.05
+      kl_factor: 1.4
+      lr_factor: 1.2
+      min_lr: 1e-5
+      max_lr: 1e-3
     value_learning_rate_scheduler: null
     observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
     policy_grad_norm_clip: 0.5
     value_grad_norm_clip: 0.5
     entropy_loss_scale: 5e-4
-    spike_activity_loss_scale: 0.05
+    spike_activity_loss_scale: 0.025
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:
+      checkpoint_interval: 100000
       write_interval: 10000
 
 runner:
@@ -88,9 +108,9 @@ runner:
 
 trainer:
   params:
-    timesteps: 600000
+    timesteps: 1000000
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 100
+      episodes: 32
       min_interval: 50000

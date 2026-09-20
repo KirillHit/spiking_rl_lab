@@ -1,10 +1,9 @@
 # @package _global_
-# PPO with an SNN Beta policy and a feed-forward value network on Walker2d-v5.
-
+# PPO with an ANN Beta policy and a feed-forward value network on Pendulum-v1.
 env:
   name: gymnasium
   params:
-    id: Walker2d-v5
+    id: Pendulum-v1
     n_envs: 16
     render: false
 
@@ -13,37 +12,21 @@ agent:
   params:
     policy_network:
       nodes:
-        - name: population_code
-          params:
-            neurons_per_feature: 16
-            sigma: 0.3
-            learnable_mu: true
-            learnable_sigma: true
         - name: linear
           params:
             out_features: 128
-        - name: lif
+        - name: torch_activation
           params:
-            k: 0.4
-            v_th: 0.25
-            shared_k: false
-            learnable_v_th: true
+            activation: relu
         - name: linear
           params:
             out_features: 128
-        - name: lif
+        - name: torch_activation
           params:
-            k: 0.4
-            v_th: 0.25
-            shared_k: false
-            learnable_v_th: true
+            activation: relu
         - name: linear
           params:
-            out_features: 12
-        - name: li
-          params:
-            k: 0.2
-            shared_k: false
+            out_features: 2
     value_network:
       nodes:
         - name: linear
@@ -100,16 +83,16 @@ runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_walker2d_snn
+  experiment_name: ppo_pendulum_ann
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
-  demo_fps: 125
+  demo_fps: 30.0
   dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
   dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
 
 trainer:
   params:
-    timesteps: 3000000
+    timesteps: 1000000
     headless: true
     close_environment_at_exit: false
     validation:
