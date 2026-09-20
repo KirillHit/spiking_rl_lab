@@ -87,7 +87,7 @@ runner:
 
 trainer:
   params:
-    timesteps: 500000
+    timesteps: 1000000
     headless: true
     close_environment_at_exit: false
     validation:
