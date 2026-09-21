@@ -106,7 +106,7 @@ runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_pendulum_snn
+  experiment_name: ppo_pendulum
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
   demo_fps: 30.0

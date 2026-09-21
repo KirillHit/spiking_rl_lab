@@ -87,7 +87,7 @@ runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_ant_ann
+  experiment_name: ppo_ant
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
   demo_fps: 20.0

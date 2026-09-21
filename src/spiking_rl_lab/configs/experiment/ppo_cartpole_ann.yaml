@@ -83,7 +83,7 @@ runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_cartpole_ann
+  experiment_name: ppo_cartpole
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
   demo_fps: 50.0
