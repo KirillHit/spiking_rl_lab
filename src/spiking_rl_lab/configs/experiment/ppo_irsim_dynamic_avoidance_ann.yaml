@@ -49,6 +49,10 @@ agent:
     device: cpu
     policy:
       name: beta
+      params:
+        learnable_bias: true
+        b_common_init: 0.0
+        b_diff_init: 0.0
     rollouts: 640
     sequence_length: 8
     learning_epochs: 4
@@ -91,6 +95,6 @@ trainer:
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 10
+      episodes: 100
       min_interval: 20000
       max_interval: 50000

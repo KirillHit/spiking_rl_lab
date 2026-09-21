@@ -21,6 +21,7 @@ agent:
         - name: linear
           params:
             out_features: 128
+            bias: false
         - name: lif
           params:
             k: 0.4
@@ -30,6 +31,7 @@ agent:
         - name: linear
           params:
             out_features: 128
+            bias: false
         - name: lif
           params:
             k: 0.4
@@ -39,6 +41,7 @@ agent:
         - name: linear
           params:
             out_features: 2
+            bias: false
         - name: li
           params:
             k: 0.2
@@ -71,14 +74,14 @@ agent:
     ratio_clip: 0.2
     value_clip: 0.0
     value_loss_scale: 1.0
-    kl_threshold: 0.02
+    kl_threshold: 0.06
     discount_factor: 0.99
     gae_lambda: 0.99
     policy_learning_rate: 1e-3
     value_learning_rate: 1e-3
     policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
     policy_learning_rate_scheduler_kwargs:
-      kl_threshold: 0.008
+      kl_threshold: 0.05
       kl_factor: 1.4
       lr_factor: 1.2
       min_lr: 1e-5
@@ -87,13 +90,13 @@ agent:
     observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
     policy_grad_norm_clip: 0.5
     value_grad_norm_clip: 0.5
-    entropy_loss_scale: 0.003
+    entropy_loss_scale: 5e-4
     spike_activity_loss_scale: 0.025
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:
       checkpoint_interval: 100000
-      write_interval: 10000
+      write_interval: 1000
 
 runner:
   mode: train
@@ -108,10 +111,10 @@ runner:
 
 trainer:
   params:
-    timesteps: 1000000
+    timesteps: 20000
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 32
-      min_interval: 50000
-      max_interval: 100000
+      episodes: 100
+      min_interval: 1000
+      max_interval: 2000

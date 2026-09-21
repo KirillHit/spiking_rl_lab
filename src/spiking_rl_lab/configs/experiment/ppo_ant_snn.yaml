@@ -21,6 +21,7 @@ agent:
         - name: linear
           params:
             out_features: 128
+            bias: false
         - name: lif
           params:
             k: 0.4
@@ -30,6 +31,7 @@ agent:
         - name: linear
           params:
             out_features: 128
+            bias: false
         - name: lif
           params:
             k: 0.4
@@ -39,6 +41,7 @@ agent:
         - name: linear
           params:
             out_features: 16
+            bias: false
         - name: li
           params:
             k: 0.2
@@ -63,6 +66,10 @@ agent:
     device: cpu
     policy:
       name: beta
+      params:
+        learnable_bias: true
+        b_common_init: 0.0
+        b_diff_init: 0.0
     rollouts: 64
     sequence_length: 8
     state_burn_in: 32
@@ -112,6 +119,6 @@ trainer:
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 32
+      episodes: 100
       min_interval: 50000
       max_interval: 100000

@@ -47,6 +47,10 @@ agent:
     device: cpu
     policy:
       name: beta
+      params:
+        learnable_bias: true
+        b_common_init: 0.0
+        b_diff_init: 0.0
     rollouts: 64
     sequence_length: 8
     state_burn_in: 32
@@ -77,7 +81,7 @@ agent:
     rewards_shaper: null
     experiment:
       checkpoint_interval: 100000
-      write_interval: 10000
+      write_interval: 1000
 
 runner:
   mode: train
@@ -92,10 +96,10 @@ runner:
 
 trainer:
   params:
-    timesteps: 1000000
+    timesteps: 100000
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 32
-      min_interval: 50000
-      max_interval: 100000
+      episodes: 100
+      min_interval: 1000
+      max_interval: 2000

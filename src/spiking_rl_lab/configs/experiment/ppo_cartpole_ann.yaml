@@ -77,7 +77,7 @@ agent:
     rewards_shaper: null
     experiment:
       checkpoint_interval: 100000
-      write_interval: 10000
+      write_interval: 1000
 
 runner:
   mode: train
@@ -92,10 +92,10 @@ runner:
 
 trainer:
   params:
-    timesteps: 1000000
+    timesteps: 20000
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 32
-      min_interval: 50000
-      max_interval: 100000
+      episodes: 100
+      min_interval: 1000
+      max_interval: 2000

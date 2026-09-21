@@ -29,7 +29,7 @@ class LinearNode(BaseNode):
         """Linear layer configuration."""
 
         out_features: int
-        bias: bool = False
+        bias: bool = True
 
     def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
         """Initialize the node."""
