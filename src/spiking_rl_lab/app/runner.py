@@ -122,8 +122,16 @@ class Runner:
             cfg.optuna.n_jobs,
         )
         with mlflow.start_run(run_name=f"{self._generate_run_name(cfg)}_optimize") as run:
+            storage = (
+                optuna.storages.RDBStorage(
+                    cfg.optuna.storage,
+                    engine_kwargs={"pool_pre_ping": True, "pool_recycle": 300},
+                )
+                if cfg.optuna.storage is not None
+                else None
+            )
             study = optuna.create_study(
-                storage=cfg.optuna.storage,
+                storage=storage,
                 study_name=cfg.optuna.study_name,
                 direction=cfg.optuna.direction,
                 load_if_exists=cfg.optuna.storage is not None,
