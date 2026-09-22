@@ -59,6 +59,8 @@ class OptunaParameter:
 class OptunaConfig:
     """Hyperparameter optimization configuration for Optuna."""
 
+    storage: str | None = None
+    study_name: str | None = None
     n_trials: int = 50
     n_jobs: int = 1
     timeout: float | None = None  # Seconds; a running trial is allowed to finish.

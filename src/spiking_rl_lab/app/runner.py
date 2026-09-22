@@ -110,15 +110,24 @@ class Runner:
         if not cfg.optuna.parameters:
             msg = "Optimize mode requires at least one Optuna parameter"
             raise ValueError(msg)
+        if cfg.optuna.storage is not None and cfg.optuna.study_name is None:
+            msg = "Optuna storage requires a study name"
+            raise ValueError(msg)
 
         log.info(
-            "Starting optimization: direction=%s, trials=%d, jobs=%d",
+            "Starting optimization: study=%s, direction=%s, trials=%d, jobs=%d",
+            cfg.optuna.study_name,
             cfg.optuna.direction,
             cfg.optuna.n_trials,
             cfg.optuna.n_jobs,
         )
         with mlflow.start_run(run_name=f"{self._generate_run_name(cfg)}_optimize") as run:
-            study = optuna.create_study(direction=cfg.optuna.direction)
+            study = optuna.create_study(
+                storage=cfg.optuna.storage,
+                study_name=cfg.optuna.study_name,
+                direction=cfg.optuna.direction,
+                load_if_exists=cfg.optuna.storage is not None,
+            )
             study.optimize(
                 lambda trial: self._objective(trial, cfg, run.info.run_id),
                 n_trials=cfg.optuna.n_trials,
