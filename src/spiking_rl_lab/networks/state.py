@@ -7,6 +7,15 @@ import torch
 type ListState = list[object | ListState | None]
 
 
+def has_hidden_state(state: object) -> bool:
+    """Return whether a nested network state contains a stateful value."""
+    if isinstance(state, (list, tuple)):
+        return any(has_hidden_state(item) for item in state)
+    if isinstance(state, dict):
+        return any(has_hidden_state(item) for item in state.values())
+    return state is not None
+
+
 def detach_state[StateT](state: StateT) -> StateT:
     """Detach every tensor in a nested network state from its autograd graph."""
     if isinstance(state, torch.Tensor):

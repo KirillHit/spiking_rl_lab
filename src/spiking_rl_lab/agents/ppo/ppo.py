@@ -27,6 +27,7 @@ from spiking_rl_lab.networks.state import (
     ListState,
     concatenate_states,
     detach_state,
+    has_hidden_state,
     select_state,
 )
 from spiking_rl_lab.networks.statistics.activity import (
@@ -42,8 +43,6 @@ from spiking_rl_lab.networks.statistics.normalization import (
 from spiking_rl_lab.policies.builder import build_policy
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
-
     from skrl.envs.wrappers.torch import Wrapper
     from skrl.memories.torch import Memory
 
@@ -74,13 +73,13 @@ class _BurnIn:
 
 @dataclasses.dataclass(slots=True)
 class _ReplayResult:
-    """States and KL produced by a chronological rollout replay."""
+    """KL and any recurrent states refreshed from a rollout."""
 
     approximate_kl: float
-    policy_state: ListState
-    value_state: ListState
-    sequence_policy_state: ListState
-    sequence_value_state: ListState
+    policy_state: ListState | None = None
+    value_state: ListState | None = None
+    sequence_policy_state: ListState | None = None
+    sequence_value_state: ListState | None = None
 
 
 @dataclasses.dataclass(slots=True)
@@ -460,27 +459,49 @@ class PPO(BaseAgent):
         return policy_loss, value_loss, entropy_loss, activity_loss
 
     @torch.no_grad()
-    def _burn_in_states(self, observations: torch.Tensor) -> tuple[ListState, ListState]:
+    def _burn_in_states(
+        self,
+        observations: torch.Tensor,
+        *,
+        policy_stateful: bool,
+        value_stateful: bool,
+    ) -> tuple[ListState | None, ListState | None]:
         """Reconstruct states at the beginning of a rollout."""
         initial_inputs = self._burn_in.observations[0] if self._burn_in else observations[0]
-        policy_state = self.policy_network.initial_state(initial_inputs)
-        value_state = self.value_network.initial_state(initial_inputs)
+        policy_state = (
+            self.policy_network.initial_state(initial_inputs) if policy_stateful else None
+        )
+        value_state = self.value_network.initial_state(initial_inputs) if value_stateful else None
 
-        if self._burn_in:
-            for step_observations, step_dones in zip(
-                self._burn_in.observations, self._burn_in.dones, strict=True
-            ):
+        if not self._burn_in or not (policy_stateful or value_stateful):
+            return policy_state, value_state
+
+        for step_observations, step_dones in zip(
+            self._burn_in.observations, self._burn_in.dones, strict=True
+        ):
+            if policy_stateful:
                 _, policy_state = self.policy_network(step_observations, policy_state)
-                _, value_state = self.value_network(step_observations, value_state)
                 policy_state = self.policy_network.reset_state(policy_state, step_dones)
+            if value_stateful:
+                _, value_state = self.value_network(step_observations, value_state)
                 value_state = self.value_network.reset_state(value_state, step_dones)
 
         return policy_state, value_state
 
     @torch.no_grad()
-    def _replay_rollout(self, rollout: _Rollout) -> _ReplayResult:
-        """Replay a rollout chronologically with the current network parameters."""
-        policy_state, value_state = self._burn_in_states(rollout.observations)
+    def _replay_rollout(
+        self,
+        rollout: _Rollout,
+        *,
+        policy_stateful: bool,
+        value_stateful: bool,
+    ) -> _ReplayResult:
+        """Replay only stateful networks chronologically with the current parameters."""
+        policy_state, value_state = self._burn_in_states(
+            rollout.observations,
+            policy_stateful=policy_stateful,
+            value_stateful=value_stateful,
+        )
 
         sequence_policy_states = []
         sequence_value_states = []
@@ -495,24 +516,71 @@ class PPO(BaseAgent):
             )
         ):
             if step % self.cfg.sequence_length == 0:
-                sequence_policy_states.append(detach_state(policy_state))
-                sequence_value_states.append(detach_state(value_state))
+                if policy_stateful:
+                    sequence_policy_states.append(detach_state(policy_state))
+                if value_stateful:
+                    sequence_value_states.append(detach_state(value_state))
 
-            policy_outputs, policy_state = self.policy_network(step_observations, policy_state)
-            _, value_state = self.value_network(step_observations, value_state)
-            distribution = self.policy.distribution(policy_outputs)
-            log_ratios.append(distribution.log_prob(step_actions) - step_old_log_prob)
-            policy_state = self.policy_network.reset_state(policy_state, step_dones)
-            value_state = self.value_network.reset_state(value_state, step_dones)
+            if policy_stateful:
+                policy_outputs, policy_state = self.policy_network(step_observations, policy_state)
+                distribution = self.policy.distribution(policy_outputs)
+                log_ratios.append(distribution.log_prob(step_actions) - step_old_log_prob)
+                policy_state = self.policy_network.reset_state(policy_state, step_dones)
+            if value_stateful:
+                _, value_state = self.value_network(step_observations, value_state)
+                value_state = self.value_network.reset_state(value_state, step_dones)
 
-        log_ratio = torch.stack(log_ratios)
+        if policy_stateful:
+            log_ratio = torch.stack(log_ratios)
+            approximate_kl = (torch.expm1(log_ratio) - log_ratio).mean().item()
+        else:
+            approximate_kl = self._estimate_stateless_kl(rollout)
+
         return _ReplayResult(
-            approximate_kl=(torch.expm1(log_ratio) - log_ratio).mean().item(),
-            policy_state=detach_state(policy_state),
-            value_state=detach_state(value_state),
-            sequence_policy_state=concatenate_states(sequence_policy_states),
-            sequence_value_state=concatenate_states(sequence_value_states),
+            approximate_kl=approximate_kl,
+            policy_state=detach_state(policy_state) if policy_stateful else None,
+            value_state=detach_state(value_state) if value_stateful else None,
+            sequence_policy_state=(
+                concatenate_states(sequence_policy_states) if policy_stateful else None
+            ),
+            sequence_value_state=(
+                concatenate_states(sequence_value_states) if value_stateful else None
+            ),
         )
+
+    @torch.no_grad()
+    def _estimate_stateless_kl(self, rollout: _Rollout) -> float:
+        """Estimate full-rollout KL with one vectorized stateless policy pass."""
+        observations = rollout.observations.flatten(0, 1)
+        actions = rollout.actions.flatten(0, 1)
+        old_log_prob = rollout.log_prob.flatten(0, 1)
+        policy_outputs, _ = self.policy_network(observations)
+        distribution = self.policy.distribution(policy_outputs)
+        log_ratio = distribution.log_prob(actions) - old_log_prob
+        return (torch.expm1(log_ratio) - log_ratio).mean().item()
+
+    def _refresh_rollout(
+        self,
+        rollout: _Rollout,
+        batch: _SequenceBatch,
+        *,
+        policy_stateful: bool,
+        value_stateful: bool,
+    ) -> _ReplayResult:
+        """Measure KL and refresh states only for recurrent networks."""
+        if not policy_stateful and not value_stateful:
+            return _ReplayResult(approximate_kl=self._estimate_stateless_kl(rollout))
+
+        replay = self._replay_rollout(
+            rollout,
+            policy_stateful=policy_stateful,
+            value_stateful=value_stateful,
+        )
+        if replay.sequence_policy_state is not None:
+            batch.policy_state = replay.sequence_policy_state
+        if replay.sequence_value_state is not None:
+            batch.value_state = replay.sequence_value_state
+        return replay
 
     def _remember_burn_in(self, rollout: _Rollout) -> None:
         """Retain the end of this rollout for the next rollout's burn-in."""
@@ -526,21 +594,19 @@ class PPO(BaseAgent):
         )
 
     @torch.no_grad()
-    def _update_batch_norm_statistics(self, batch: _SequenceBatch) -> None:
-        """Update normalization statistics from one final-network rollout replay."""
-        if not has_batch_norm(self.policy_network, self.value_network):
-            return
-
-        policy_state = batch.policy_state
-        value_state = batch.value_state
-        with collect_batch_norm_statistics(self.policy_network, self.value_network):
+    def _update_batch_norm_statistics(
+        self,
+        network: NodeNetwork,
+        state: ListState,
+        batch: _SequenceBatch,
+    ) -> None:
+        """Update one network's normalization statistics from the final rollout."""
+        with collect_batch_norm_statistics(network):
             for step in range(self.cfg.sequence_length):
-                _, policy_state = self.policy_network(batch.observations[step], policy_state)
-                _, value_state = self.value_network(batch.observations[step], value_state)
-                policy_state = self.policy_network.reset_state(policy_state, batch.dones[step])
-                value_state = self.value_network.reset_state(value_state, batch.dones[step])
+                _, state = network(batch.observations[step], state)
+                state = network.reset_state(state, batch.dones[step])
 
-        apply_collected_batch_norm_statistics(self.policy_network, self.value_network)
+        apply_collected_batch_norm_statistics(network)
 
     @torch.no_grad()
     def _track_value_statistics(self, batch: _SequenceBatch) -> None:
@@ -584,13 +650,6 @@ class PPO(BaseAgent):
             torch.nn.utils.clip_grad_norm_(self._value_parameters, self.cfg.value_grad_norm_clip)
         self.value_optimizer.step()
 
-    def _mini_batch_groups(self, batch_size: int) -> Generator[torch.Tensor]:
-        """Yield shuffled mini-batch indices for every learning epoch."""
-        for _ in range(self.cfg.learning_epochs):
-            yield from torch.randperm(batch_size, device=self.device).tensor_split(
-                self.cfg.mini_batches
-            )
-
     def update(self, *, timestep: int, timesteps: int) -> None:
         """Update the policy and value networks from the collected rollout."""
         if not self.memory.filled:
@@ -614,23 +673,34 @@ class PPO(BaseAgent):
         batch = self._build_sequence_batch(rollout, returns, advantages)
 
         losses = []
-        for indices in self._mini_batch_groups(batch.size):
-            policy_loss, value_loss, entropy_loss, activity_loss = self._loss(batch, indices)
-            self._optimize_policy(policy_loss + entropy_loss + activity_loss)
-            self._optimize_value(value_loss)
-            losses.append(
-                torch.stack(
-                    [
-                        policy_loss.detach(),
-                        value_loss.detach(),
-                        entropy_loss.detach(),
-                        activity_loss.detach(),
-                    ]
-                )
+        policy_stateful = has_hidden_state(batch.policy_state)
+        value_stateful = has_hidden_state(batch.value_state)
+        for _ in range(self.cfg.learning_epochs):
+            mini_batch_groups = torch.randperm(batch.size, device=self.device).tensor_split(
+                self.cfg.mini_batches
             )
-            replay = self._replay_rollout(rollout)
-            batch.policy_state = replay.sequence_policy_state
-            batch.value_state = replay.sequence_value_state
+            for indices in mini_batch_groups:
+                policy_loss, value_loss, entropy_loss, activity_loss = self._loss(batch, indices)
+                self._optimize_policy(policy_loss + entropy_loss + activity_loss)
+                self._optimize_value(value_loss)
+                losses.append(
+                    torch.stack(
+                        [
+                            policy_loss.detach(),
+                            value_loss.detach(),
+                            entropy_loss.detach(),
+                            activity_loss.detach(),
+                        ]
+                    )
+                )
+
+            replay = self._refresh_rollout(
+                rollout,
+                batch,
+                policy_stateful=policy_stateful,
+                value_stateful=value_stateful,
+            )
+
             if self.cfg.kl_threshold and replay.approximate_kl > self.cfg.kl_threshold:
                 break
 
@@ -638,11 +708,27 @@ class PPO(BaseAgent):
 
         self.track_data("Learning / KL divergence", replay.approximate_kl)
 
-        if has_batch_norm(self.policy_network, self.value_network):
-            self._update_batch_norm_statistics(batch)
-            replay = self._replay_rollout(rollout)
-            batch.policy_state = replay.sequence_policy_state
-            batch.value_state = replay.sequence_value_state
+        policy_has_batch_norm = has_batch_norm(self.policy_network)
+        value_has_batch_norm = has_batch_norm(self.value_network)
+        if policy_has_batch_norm:
+            self._update_batch_norm_statistics(
+                self.policy_network,
+                batch.policy_state,
+                batch,
+            )
+        if value_has_batch_norm:
+            self._update_batch_norm_statistics(
+                self.value_network,
+                batch.value_state,
+                batch,
+            )
+        if (policy_has_batch_norm or value_has_batch_norm) and (policy_stateful or value_stateful):
+            replay = self._refresh_rollout(
+                rollout,
+                batch,
+                policy_stateful=policy_stateful,
+                value_stateful=value_stateful,
+            )
 
         self._track_value_statistics(batch)
 
