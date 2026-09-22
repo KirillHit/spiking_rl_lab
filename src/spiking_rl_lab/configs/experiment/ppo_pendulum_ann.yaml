@@ -4,7 +4,7 @@ env:
   name: gymnasium
   params:
     id: Pendulum-v1
-    n_envs: 64
+    n_envs: 16
     render: false
 
 agent:
@@ -55,7 +55,7 @@ agent:
     sequence_length: 8
     state_burn_in: 32
     learning_epochs: 4
-    mini_batches: 16
+    mini_batches: 4
     ratio_clip: 0.2
     value_clip: 0.0
     value_loss_scale: 1.0
