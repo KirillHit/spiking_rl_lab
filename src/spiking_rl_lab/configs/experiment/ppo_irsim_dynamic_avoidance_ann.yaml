@@ -89,7 +89,7 @@ runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_irsim_dynamic_avoidance_ann
+  experiment_name: ppo_irsim_dynamic_avoidance
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
   demo_fps: 20.0
@@ -98,10 +98,10 @@ runner:
 
 trainer:
   params:
-    timesteps: 1000000
+    timesteps: 2000000
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 100
-      min_interval: 20000
+      episodes: 32
+      min_interval: 10000
       max_interval: 50000

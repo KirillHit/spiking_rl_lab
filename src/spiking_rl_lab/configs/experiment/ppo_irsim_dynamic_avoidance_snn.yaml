@@ -28,8 +28,8 @@ agent:
           params:
             k: 0.4
             v_th: 0.25
-            shared_k: false
-            learnable_v_th: true
+            shared_k: true
+            learnable_v_th: false
         - name: linear
           params:
             out_features: 256
@@ -38,8 +38,8 @@ agent:
           params:
             k: 0.4
             v_th: 0.25
-            shared_k: false
-            learnable_v_th: true
+            shared_k: true
+            learnable_v_th: false
         - name: linear
           params:
             out_features: 4
@@ -47,7 +47,7 @@ agent:
         - name: li
           params:
             k: 0.2
-            shared_k: false
+            shared_k: true
     value_network:
       nodes:
         - name: linear
@@ -108,7 +108,7 @@ runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_irsim_dynamic_avoidance_snn
+  experiment_name: ppo_irsim_dynamic_avoidance
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
   demo_fps: 20.0
@@ -117,10 +117,10 @@ runner:
 
 trainer:
   params:
-    timesteps: 1000000
+    timesteps: 2000000
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 100
-      min_interval: 20000
+      episodes: 32
+      min_interval: 10000
       max_interval: 50000
