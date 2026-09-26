@@ -33,22 +33,15 @@ agent:
           params:
             out_features: 256
             bias: false
-        - name: lif
-          params:
-            decay: 0.6
-            normalize_input: false
-            v_th: 0.25
-            shared_decay: false
-            learnable_v_th: true
-        - name: linear
-          params:
-            out_features: 2
-            bias: false
         - name: li
           params:
             decay: 0.8
             normalize_input: false
             shared_decay: false
+        - name: linear
+          params:
+            out_features: 2
+            bias: false
     value_network:
       nodes:
         - name: linear
