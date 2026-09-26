@@ -30,6 +30,7 @@ class LinearNode(BaseNode):
 
         out_features: int
         bias: bool = True
+        init_scale: float = 1.0
 
     def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
         """Initialize the node."""
@@ -50,6 +51,8 @@ class LinearNode(BaseNode):
     def initialize_parameters(self) -> None:
         """Initialize the layer parameters."""
         nn.init.kaiming_normal_(self._layer.weight, mode="fan_in", nonlinearity="relu")
+        with torch.no_grad():
+            self._layer.weight.mul_(self._cfg.init_scale)
         if self._layer.bias is not None:
             nn.init.constant_(self._layer.bias, 0)
 

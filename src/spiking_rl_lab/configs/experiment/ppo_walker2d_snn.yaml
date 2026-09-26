@@ -23,6 +23,7 @@ agent:
           params:
             out_features: 256
             bias: false
+            init_scale: 0.4
         - name: lif
           params:
             decay: 0.6
@@ -34,6 +35,7 @@ agent:
           params:
             out_features: 256
             bias: false
+            init_scale: 0.2
         - name: li
           params:
             decay: 0.8
