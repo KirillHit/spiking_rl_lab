@@ -62,7 +62,7 @@ agent:
     kl_threshold: 0.04
     discount_factor: 0.99
     gae_lambda: 0.95
-    policy_learning_rate: 1e-3
+    policy_learning_rate: 1e-4
     value_learning_rate: 1e-3
     policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
     policy_learning_rate_scheduler_kwargs:
