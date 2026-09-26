@@ -4,7 +4,7 @@ env:
   name: gymnasium
   params:
     id: spiking_rl_lab.envs.irsim:IRSimDynamicAvoidance-v0
-    n_envs: 32
+    n_envs: 16
     render: false
     kwargs:
       max_episode_steps: 1000
@@ -98,7 +98,7 @@ runner:
 
 trainer:
   params:
-    timesteps: 2000000
+    timesteps: 1000000
     headless: true
     close_environment_at_exit: false
     validation:

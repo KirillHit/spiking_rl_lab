@@ -28,8 +28,9 @@ agent:
           params:
             k: 0.4
             v_th: 0.25
-            shared_k: true
-            learnable_v_th: false
+            shared_k: false
+            learnable_k: true
+            learnable_v_th: true
         - name: linear
           params:
             out_features: 256
@@ -38,8 +39,9 @@ agent:
           params:
             k: 0.4
             v_th: 0.25
-            shared_k: true
-            learnable_v_th: false
+            shared_k: false
+            learnable_k: true
+            learnable_v_th: true
         - name: linear
           params:
             out_features: 4
@@ -47,7 +49,8 @@ agent:
         - name: li
           params:
             k: 0.2
-            shared_k: true
+            shared_k: false
+            learnable_k: true
     value_network:
       nodes:
         - name: linear
@@ -117,7 +120,7 @@ runner:
 
 trainer:
   params:
-    timesteps: 2000000
+    timesteps: 1000000
     headless: true
     close_environment_at_exit: false
     validation:
