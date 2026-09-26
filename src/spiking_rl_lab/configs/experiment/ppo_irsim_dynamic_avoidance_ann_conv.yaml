@@ -1,5 +1,5 @@
 # @package _global_
-# PPO with a dense SNN policy for dynamic avoidance in IR-SIM.
+# ANN convolutional control: same population encoding and convolutions, ReLU activations.
 env:
   name: gymnasium
   params:
@@ -20,34 +20,50 @@ agent:
             sigma: 0.3
             learnable_mu: true
             learnable_sigma: true
+        - name: sequence_branch
+          params:
+            sequence_features: 72
+            tail_features: 5
+            channels_per_feature: 16
+            nodes:
+              - name: conv1d
+                params:
+                  out_channels: 32
+                  kernel_size: 5
+                  stride: 2
+                  padding: 2
+                  padding_mode: circular
+              - name: torch_activation
+                params:
+                  activation: relu
+              - name: conv1d
+                params:
+                  out_channels: 32
+                  kernel_size: 3
+                  stride: 2
+                  padding: 1
+                  padding_mode: circular
+              - name: torch_activation
+                params:
+                  activation: relu
         - name: linear
           params:
             out_features: 256
             bias: false
-        - name: lif
+        - name: torch_activation
           params:
-            k: 0.4
-            v_th: 0.25
-            shared_k: true
-            learnable_v_th: false
+            activation: relu
         - name: linear
           params:
             out_features: 256
             bias: false
-        - name: lif
+        - name: torch_activation
           params:
-            k: 0.4
-            v_th: 0.25
-            shared_k: true
-            learnable_v_th: false
+            activation: relu
         - name: linear
           params:
             out_features: 4
             bias: false
-        - name: li
-          params:
-            k: 0.2
-            shared_k: true
     value_network:
       nodes:
         - name: linear
@@ -97,7 +113,7 @@ agent:
     policy_grad_norm_clip: 0.5
     value_grad_norm_clip: 0.5
     entropy_loss_scale: 5e-4
-    spike_activity_loss_scale: 0.025
+    spike_activity_loss_scale: 0.0
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:

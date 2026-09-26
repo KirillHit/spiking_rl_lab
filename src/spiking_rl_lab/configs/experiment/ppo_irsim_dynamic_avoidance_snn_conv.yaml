@@ -1,5 +1,5 @@
 # @package _global_
-# PPO with a dense SNN policy for dynamic avoidance in IR-SIM.
+# PPO with a circular convolutional LiDAR branch for dynamic avoidance in IR-SIM.
 env:
   name: gymnasium
   params:
@@ -20,6 +20,38 @@ agent:
             sigma: 0.3
             learnable_mu: true
             learnable_sigma: true
+        - name: sequence_branch
+          params:
+            sequence_features: 72
+            tail_features: 5
+            channels_per_feature: 16
+            nodes:
+              - name: conv1d
+                params:
+                  out_channels: 32
+                  kernel_size: 5
+                  stride: 2
+                  padding: 2
+                  padding_mode: circular
+              - name: lif
+                params:
+                  k: 0.4
+                  v_th: 0.25
+                  shared_k: true
+                  learnable_v_th: false
+              - name: conv1d
+                params:
+                  out_channels: 32
+                  kernel_size: 3
+                  stride: 2
+                  padding: 1
+                  padding_mode: circular
+              - name: lif
+                params:
+                  k: 0.4
+                  v_th: 0.25
+                  shared_k: true
+                  learnable_v_th: false
         - name: linear
           params:
             out_features: 256
