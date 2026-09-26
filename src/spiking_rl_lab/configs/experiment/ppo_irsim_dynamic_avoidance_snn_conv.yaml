@@ -35,10 +35,11 @@ agent:
                   padding_mode: circular
               - name: lif
                 params:
-                  k: 0.4
+                  decay: 0.6
+                  normalize_input: false
                   v_th: 0.25
-                  shared_k: false
-                  learnable_k: true
+                  shared_decay: false
+                  learnable_decay: true
                   learnable_v_th: true
               - name: conv1d
                 params:
@@ -49,10 +50,11 @@ agent:
                   padding_mode: circular
               - name: lif
                 params:
-                  k: 0.4
+                  decay: 0.6
+                  normalize_input: false
                   v_th: 0.25
-                  shared_k: false
-                  learnable_k: true
+                  shared_decay: false
+                  learnable_decay: true
                   learnable_v_th: true
         - name: linear
           params:
@@ -60,10 +62,11 @@ agent:
             bias: false
         - name: lif
           params:
-            k: 0.4
+            decay: 0.6
+            normalize_input: false
             v_th: 0.25
-            shared_k: false
-            learnable_k: true
+            shared_decay: false
+            learnable_decay: true
             learnable_v_th: true
         - name: linear
           params:
@@ -71,10 +74,11 @@ agent:
             bias: false
         - name: lif
           params:
-            k: 0.4
+            decay: 0.6
+            normalize_input: false
             v_th: 0.25
-            shared_k: false
-            learnable_k: true
+            shared_decay: false
+            learnable_decay: true
             learnable_v_th: true
         - name: linear
           params:
@@ -82,9 +86,10 @@ agent:
             bias: false
         - name: li
           params:
-            k: 0.2
-            shared_k: false
-            learnable_k: true
+            decay: 0.8
+            normalize_input: false
+            shared_decay: false
+            learnable_decay: true
     value_network:
       nodes:
         - name: linear
