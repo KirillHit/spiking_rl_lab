@@ -26,8 +26,7 @@ agent:
         - name: lif
           params:
             decay: 0.6
-            normalize_input: false
-            input_scale: 0.4
+            normalize_input: true
             v_th: 0.25
             shared_decay: false
             learnable_v_th: true
@@ -37,14 +36,17 @@ agent:
             bias: false
         - name: linear
           params:
-            out_features: 12
+            out_features: 96
             bias: false
         - name: li
           params:
             decay: 0.8
-            normalize_input: false
-            input_scale: 0.2
+            normalize_input: true
             shared_decay: false
+        - name: population_decode
+          params:
+            num_populations: 12
+            neurons_per_population: 8
     value_network:
       nodes:
         - name: linear
