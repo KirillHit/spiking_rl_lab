@@ -151,12 +151,10 @@ class PPO(BaseAgent):
         self._value_parameters = tuple(
             parameter for parameter in self.value_network.parameters() if parameter.requires_grad
         )
-        self.policy_optimizer = torch.optim.Adamax(
+        self.policy_optimizer = torch.optim.Adam(
             self._policy_parameters, lr=cfg.policy_learning_rate
         )
-        self.value_optimizer = torch.optim.Adamax(
-            self._value_parameters, lr=cfg.value_learning_rate
-        )
+        self.value_optimizer = torch.optim.Adam(self._value_parameters, lr=cfg.value_learning_rate)
         self.checkpoint_modules.update(
             policy_network=self.policy_network,
             value_network=self.value_network,
