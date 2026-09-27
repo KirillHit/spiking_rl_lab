@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import TYPE_CHECKING, NamedTuple
 
 import torch
@@ -49,6 +50,7 @@ class LIFNode(BaseNode):
         learnable_decay: bool = True
         shared_decay: bool = False
         normalize_input: bool = False
+        input_scale: float = 1.0  # Fixed input gain, independent of decay.
         v_th: float = 1.0
         learnable_v_th: bool = False
         v_reset: float = 0.0
@@ -56,7 +58,13 @@ class LIFNode(BaseNode):
         alpha: float = 100.0
 
         def validate(self) -> None:
-            """Validate the memory retention coefficient initialization."""
+            """Validate memory retention and input scaling."""
+            if not math.isfinite(self.input_scale) or self.input_scale <= 0.0:
+                msg = "input_scale must be finite and positive"
+                raise ValueError(msg)
+            if self.normalize_input and self.input_scale != 1.0:
+                msg = "normalize_input requires input_scale == 1.0"
+                raise ValueError(msg)
             if not 0.0 <= self.decay <= 1.0:
                 msg = "decay must be between 0 and 1"
                 raise ValueError(msg)
@@ -108,8 +116,8 @@ class LIFNode(BaseNode):
         if state is None:
             state = self.initial_state(inputs)
         decay = self._decay_logit.sigmoid() if self._decay_logit is not None else self._cfg.decay
-        drive = (1 - decay) * inputs if self._cfg.normalize_input else inputs
-        voltage = decay * state.v + drive
+        input_scale = 1 - decay if self._cfg.normalize_input else self._cfg.input_scale
+        voltage = decay * state.v + input_scale * inputs
         v_th = self._cfg.v_th
         if self._v_th_raw is not None:
             v_th = self._cfg.v_reset + torch.nn.functional.softplus(self._v_th_raw) + 1e-6
@@ -130,9 +138,16 @@ class LINode(BaseNode):
         learnable_decay: bool = True
         shared_decay: bool = False
         normalize_input: bool = False
+        input_scale: float = 1.0  # Fixed input gain, independent of decay.
 
         def validate(self) -> None:
-            """Validate the memory retention coefficient initialization."""
+            """Validate memory retention and input scaling."""
+            if not math.isfinite(self.input_scale) or self.input_scale <= 0.0:
+                msg = "input_scale must be finite and positive"
+                raise ValueError(msg)
+            if self.normalize_input and self.input_scale != 1.0:
+                msg = "normalize_input requires input_scale == 1.0"
+                raise ValueError(msg)
             if not 0.0 <= self.decay <= 1.0:
                 msg = "decay must be between 0 and 1"
                 raise ValueError(msg)
@@ -176,6 +191,6 @@ class LINode(BaseNode):
         if state is None:
             state = self.initial_state(inputs)
         decay = self._decay_logit.sigmoid() if self._decay_logit is not None else self._cfg.decay
-        drive = (1 - decay) * inputs if self._cfg.normalize_input else inputs
-        voltage = decay * state.v + drive
+        input_scale = 1 - decay if self._cfg.normalize_input else self._cfg.input_scale
+        voltage = decay * state.v + input_scale * inputs
         return voltage, MembraneState(v=voltage)

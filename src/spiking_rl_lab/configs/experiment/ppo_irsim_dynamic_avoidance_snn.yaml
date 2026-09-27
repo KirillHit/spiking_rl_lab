@@ -24,11 +24,11 @@ agent:
           params:
             out_features: 256
             bias: false
-            init_scale: 0.4
         - name: lif
           params:
             decay: 0.6
             normalize_input: false
+            input_scale: 0.4
             v_th: 0.25
             shared_decay: false
             learnable_decay: true
@@ -37,17 +37,17 @@ agent:
           params:
             out_features: 256
             bias: false
-            init_scale: 0.2
-        - name: li
-          params:
-            decay: 0.8
-            normalize_input: false
-            shared_decay: false
-            learnable_decay: true
         - name: linear
           params:
             out_features: 4
             bias: false
+        - name: li
+          params:
+            decay: 0.8
+            normalize_input: false
+            input_scale: 0.2
+            shared_decay: false
+            learnable_decay: true
     value_network:
       nodes:
         - name: linear
@@ -83,7 +83,7 @@ agent:
     kl_threshold: 0.02
     discount_factor: 0.99
     gae_lambda: 0.95
-    policy_learning_rate: 1e-4
+    policy_learning_rate: 1e-3
     value_learning_rate: 1e-3
     policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
     policy_learning_rate_scheduler_kwargs:
