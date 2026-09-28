@@ -27,3 +27,7 @@ class ActionDistribution(ABC):
     @abstractmethod
     def entropy(self) -> torch.Tensor:
         """Return distribution uncertainty for an entropy bonus, as ``[batch, 1]``."""
+
+    def statistics(self) -> dict[str, torch.Tensor]:
+        """Return optional scalar diagnostics averaged over batch and action dimensions."""
+        return {}

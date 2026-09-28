@@ -195,6 +195,8 @@ class PPO(BaseAgent):
         self._next_observation: torch.Tensor | None = None
         self._current_value: torch.Tensor | None = None
         self._current_log_prob: torch.Tensor | None = None
+        self._distribution_statistics: dict[str, torch.Tensor] = {}
+        self._distribution_statistics_steps = 0
 
     def build_memory(self, *, env: Wrapper) -> Memory:
         """Build storage for one rollout."""
@@ -235,6 +237,8 @@ class PPO(BaseAgent):
         self._next_observation = None
         self._current_value = None
         self._current_log_prob = None
+        self._distribution_statistics.clear()
+        self._distribution_statistics_steps = 0
 
     def act(
         self,
@@ -266,6 +270,11 @@ class PPO(BaseAgent):
             if self.training:
                 self._current_value = values
                 self._current_log_prob = distribution.log_prob(actions)
+                for name, value in distribution.statistics().items():
+                    self._distribution_statistics[name] = (
+                        self._distribution_statistics.get(name, 0) + value.detach()
+                    )
+                self._distribution_statistics_steps += 1
 
         return actions, {}
 
@@ -632,6 +641,11 @@ class PPO(BaseAgent):
         self.track_data("Value / Prediction mean", predictions.mean().item())
         self.track_data("Value / Prediction std", predictions.std(unbiased=False).item())
 
+    def _track_distribution_statistics(self) -> None:
+        """Track uncertainty of the behavior policy that collected the rollout."""
+        for name, total in self._distribution_statistics.items():
+            self.track_data(name, (total / self._distribution_statistics_steps).item())
+
     def _optimize_policy(self, loss: torch.Tensor) -> None:
         """Apply one clipped actor gradient step."""
         self.policy_optimizer.zero_grad(set_to_none=True)
@@ -736,6 +750,7 @@ class PPO(BaseAgent):
         policy_loss, value_loss, entropy_loss, activity_loss = torch.stack(losses).mean(0)
 
         self.track_data("Learning / Policy updates", len(losses))
+        self._track_distribution_statistics()
         self.track_data("Loss / Policy loss", policy_loss.item())
         self.track_data("Loss / Value loss", value_loss.item())
         if self.cfg.spike_activity_loss_scale:

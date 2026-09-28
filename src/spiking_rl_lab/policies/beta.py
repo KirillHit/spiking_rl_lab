@@ -56,6 +56,13 @@ class _BetaDistribution(ActionDistribution):
         """Return the exact entropy after affine action scaling."""
         return self._reduce(self.distribution.entropy() + self.scale.log())
 
+    def statistics(self) -> dict[str, torch.Tensor]:
+        """Measure Beta uncertainty in environment action units, independent of reduction."""
+        return {
+            "Policy / Beta entropy": (self.distribution.entropy() + self.scale.log()).mean(),
+            "Policy / Beta action std": (self.scale * self.distribution.stddev).mean(),
+        }
+
 
 @register_policy("beta")
 class BetaPolicy(BasePolicy):
