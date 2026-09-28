@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import TYPE_CHECKING, Literal
 
 import torch
@@ -74,6 +75,8 @@ class BetaPolicy(BasePolicy):
 
         reduction: Literal["mean", "sum"] = "sum"
         min_shape_offset: float = 1e-3
+        learnable_concentration: bool = False
+        initial_concentration: float = 1.4
         learnable_bias: bool = False
         b_common_init: float = 0.0
         b_diff_init: float = 0.0
@@ -81,6 +84,7 @@ class BetaPolicy(BasePolicy):
         def __post_init__(self) -> None:
             """Validate the minimum offset from the uniform Beta shape."""
             require_positive("min_shape_offset", self.min_shape_offset)
+            require_positive("initial_concentration", self.initial_concentration)
 
     def __init__(self, cfg: Config, *, action_space: gymnasium.Space) -> None:
         """Initialize a Beta policy for a finite continuous action space."""
@@ -99,6 +103,11 @@ class BetaPolicy(BasePolicy):
         super().__init__(cfg, action_space=action_space)
         self.register_buffer("_action_low", low, persistent=False)
         self.register_buffer("_action_scale", high - low, persistent=False)
+        self.register_parameter("log_concentration", None)
+        if cfg.learnable_concentration:
+            self.log_concentration = torch.nn.Parameter(
+                torch.full((self.num_actions,), math.log(cfg.initial_concentration))
+            )
         if cfg.learnable_bias:
             self.b_common = torch.nn.Parameter(torch.full((self.num_actions,), cfg.b_common_init))
             self.b_diff = torch.nn.Parameter(torch.full((self.num_actions,), cfg.b_diff_init))
@@ -124,8 +133,16 @@ class BetaPolicy(BasePolicy):
         if self.b_common is not None and self.b_diff is not None:
             raw_alpha = raw_alpha + self.b_common + self.b_diff
             raw_beta = raw_beta + self.b_common - self.b_diff
-        alpha = 1 + self._cfg.min_shape_offset + torch.nn.functional.softplus(raw_alpha)
-        beta = 1 + self._cfg.min_shape_offset + torch.nn.functional.softplus(raw_beta)
+        a = self._cfg.min_shape_offset + torch.nn.functional.softplus(raw_alpha)
+        b = self._cfg.min_shape_offset + torch.nn.functional.softplus(raw_beta)
+        if self.log_concentration is None:
+            alpha = 1 + a
+            beta = 1 + b
+        else:
+            total = a + b
+            concentration = self.log_concentration.exp()
+            alpha = 1 + concentration * (a / total)
+            beta = 1 + concentration * (b / total)
         return _BetaDistribution(
             distribution=torch.distributions.Beta(alpha, beta),
             low=self._action_low.to(dtype=features.dtype),

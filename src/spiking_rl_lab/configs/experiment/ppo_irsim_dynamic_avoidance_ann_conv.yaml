@@ -85,6 +85,7 @@ agent:
     policy:
       name: beta
       params:
+        learnable_concentration: true
         learnable_bias: true
         b_common_init: 0.0
         b_diff_init: 0.0
