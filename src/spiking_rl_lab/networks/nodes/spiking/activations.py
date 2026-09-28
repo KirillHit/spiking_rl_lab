@@ -54,6 +54,7 @@ class LIFNode(BaseNode):
         v_th: float = 1.0
         learnable_v_th: bool = False
         v_reset: float = 0.0
+        detach_reset: bool = False  # Detach spikes only in the membrane reset path.
         method: str = "super"
         alpha: float = 100.0
 
@@ -122,7 +123,8 @@ class LIFNode(BaseNode):
         if self._v_th_raw is not None:
             v_th = self._cfg.v_reset + torch.nn.functional.softplus(self._v_th_raw) + 1e-6
         spikes = threshold(voltage - v_th, self._cfg.method, self._cfg.alpha)
-        voltage = (1 - spikes) * voltage + spikes * self._cfg.v_reset
+        reset_spikes = spikes.detach() if self._cfg.detach_reset else spikes
+        voltage = (1 - reset_spikes) * voltage + reset_spikes * self._cfg.v_reset
         return spikes, MembraneState(v=voltage)
 
 
