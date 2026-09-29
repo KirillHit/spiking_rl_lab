@@ -75,6 +75,7 @@ class BetaPolicy(BasePolicy):
 
         reduction: Literal["mean", "sum"] = "sum"
         min_shape_offset: float = 1e-3
+        concentration_scale: float = 1.0
         learnable_concentration: bool = False
         initial_concentration: float = 1.4
         learnable_bias: bool = False
@@ -84,6 +85,10 @@ class BetaPolicy(BasePolicy):
         def __post_init__(self) -> None:
             """Validate the minimum offset from the uniform Beta shape."""
             require_positive("min_shape_offset", self.min_shape_offset)
+            require_positive("concentration_scale", self.concentration_scale)
+            if self.learnable_concentration and self.concentration_scale != 1.0:
+                msg = "concentration_scale must be 1.0 when learnable_concentration is enabled"
+                raise ValueError(msg)
             require_positive("initial_concentration", self.initial_concentration)
 
     def __init__(self, cfg: Config, *, action_space: gymnasium.Space) -> None:
@@ -136,8 +141,8 @@ class BetaPolicy(BasePolicy):
         a = self._cfg.min_shape_offset + torch.nn.functional.softplus(raw_alpha)
         b = self._cfg.min_shape_offset + torch.nn.functional.softplus(raw_beta)
         if self.log_concentration is None:
-            alpha = 1 + a
-            beta = 1 + b
+            alpha = 1 + self._cfg.concentration_scale * a
+            beta = 1 + self._cfg.concentration_scale * b
         else:
             total = a + b
             concentration = self.log_concentration.exp()
