@@ -22,6 +22,7 @@ from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.validation import require_shape_fields
 from spiking_rl_lab.envs.observations import bootstrap_observations
 from spiking_rl_lab.networks.node_network import NodeNetwork
+from spiking_rl_lab.networks.nodes.spiking.ysskar import YsskarNeuron
 from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape
 from spiking_rl_lab.networks.state import (
     ListState,
@@ -263,8 +264,12 @@ class PPO(BaseAgent):
                 self._sequence_policy_states.append(detach_state(self._policy_state))
                 self._sequence_value_states.append(detach_state(self._value_state))
 
-            policy_features, self._policy_state = self.policy_network(inputs, self._policy_state)
-            values, self._value_state = self.value_network(inputs, self._value_state)
+            policy_features, self._policy_state = self.policy_network(
+                inputs, self._policy_state, normalize=True
+            )
+            values, self._value_state = self.value_network(
+                inputs, self._value_state, normalize=True
+            )
             distribution = self.policy.distribution(policy_features)
             actions = distribution.sample() if self.training else distribution.mode()
             if self.training:
@@ -402,8 +407,10 @@ class PPO(BaseAgent):
         """Replay one group of recurrent sequences and compute PPO losses."""
         observations = batch.observations[:, indices]
         dones = batch.dones[:, indices]
-        policy_state = select_state(batch.policy_state, indices)
-        value_state = select_state(batch.value_state, indices)
+        policy_state = self.policy_network.normalize_state(
+            select_state(batch.policy_state, indices)
+        )
+        value_state = self.value_network.normalize_state(select_state(batch.value_state, indices))
         policy_outputs = []
         predicted_values = []
 
@@ -487,10 +494,12 @@ class PPO(BaseAgent):
             self._burn_in.observations, self._burn_in.dones, strict=True
         ):
             if policy_stateful:
-                _, policy_state = self.policy_network(step_observations, policy_state)
+                _, policy_state = self.policy_network(
+                    step_observations, policy_state, normalize=True
+                )
                 policy_state = self.policy_network.reset_state(policy_state, step_dones)
             if value_stateful:
-                _, value_state = self.value_network(step_observations, value_state)
+                _, value_state = self.value_network(step_observations, value_state, normalize=True)
                 value_state = self.value_network.reset_state(value_state, step_dones)
 
         return policy_state, value_state
@@ -529,12 +538,14 @@ class PPO(BaseAgent):
                     sequence_value_states.append(detach_state(value_state))
 
             if policy_stateful:
-                policy_outputs, policy_state = self.policy_network(step_observations, policy_state)
+                policy_outputs, policy_state = self.policy_network(
+                    step_observations, policy_state, normalize=True
+                )
                 distribution = self.policy.distribution(policy_outputs)
                 log_ratios.append(distribution.log_prob(step_actions) - step_old_log_prob)
                 policy_state = self.policy_network.reset_state(policy_state, step_dones)
             if value_stateful:
-                _, value_state = self.value_network(step_observations, value_state)
+                _, value_state = self.value_network(step_observations, value_state, normalize=True)
                 value_state = self.value_network.reset_state(value_state, step_dones)
 
         if policy_stateful:
@@ -610,7 +621,7 @@ class PPO(BaseAgent):
         """Update one network's normalization statistics from the final rollout."""
         with collect_batch_norm_statistics(network):
             for step in range(self.cfg.sequence_length):
-                _, state = network(batch.observations[step], state)
+                _, state = network(batch.observations[step], state, normalize=True)
                 state = network.reset_state(state, batch.dones[step])
 
         apply_collected_batch_norm_statistics(network)
@@ -621,7 +632,9 @@ class PPO(BaseAgent):
         value_state = batch.value_state
         predicted_values = []
         for step in range(self.cfg.sequence_length):
-            values, value_state = self.value_network(batch.observations[step], value_state)
+            values, value_state = self.value_network(
+                batch.observations[step], value_state, normalize=True
+            )
             predicted_values.append(values)
             value_state = self.value_network.reset_state(value_state, batch.dones[step])
 
@@ -662,6 +675,55 @@ class PPO(BaseAgent):
             torch.nn.utils.clip_grad_norm_(self._value_parameters, self.cfg.value_grad_norm_clip)
         self.value_optimizer.step()
 
+    def _width_penalty(self, network: NodeNetwork) -> torch.Tensor:
+        """Penalize learnable network widths above the target."""
+        if not self.cfg.width_loss_scale:
+            return next(network.parameters()).new_zeros(())
+        terms = [
+            node.width_loss(self.cfg.width_target).to(self.device)
+            for node in network.modules()
+            if isinstance(node, YsskarNeuron) and node.cfg.learnable_width
+        ]
+        return (
+            self.cfg.width_loss_scale * torch.stack(terms).mean()
+            if terms
+            else next(network.parameters()).new_zeros(())
+        )
+
+    def _track_widths(self) -> None:
+        """Record each Ysskar width and the narrowing target."""
+        if self.cfg.width_loss_scale:
+            self.track_data("Width / Target", self.cfg.width_target)
+        for name, node in self.policy_network.named_modules():
+            if isinstance(node, YsskarNeuron):
+                self.track_data(f"Width / {name}", float(torch.as_tensor(node.width).detach()))
+        for name, node in self.value_network.named_modules():
+            if isinstance(node, YsskarNeuron):
+                self.track_data(
+                    f"Width / Value / {name}", float(torch.as_tensor(node.width).detach())
+                )
+
+    def _track_losses(self, losses: list[torch.Tensor]) -> None:
+        """Record mean optimization loss components."""
+        (
+            policy_loss,
+            value_loss,
+            entropy_loss,
+            activity_loss,
+            policy_width_loss,
+            value_width_loss,
+        ) = torch.stack(losses).mean(0)
+
+        self.track_data("Loss / Policy loss", policy_loss.item())
+        self.track_data("Loss / Value loss", value_loss.item())
+        if self.cfg.spike_activity_loss_scale:
+            self.track_data("Loss / Spike activity loss", activity_loss.item())
+        if self.cfg.entropy_loss_scale:
+            self.track_data("Loss / Entropy loss", entropy_loss.item())
+        if self.cfg.width_loss_scale:
+            self.track_data("Loss / Width loss", policy_width_loss.item())
+            self.track_data("Loss / Value width loss", value_width_loss.item())
+
     def update(self, *, timestep: int, timesteps: int) -> None:
         """Update the policy and value networks from the collected rollout."""
         if not self.memory.filled:
@@ -693,8 +755,12 @@ class PPO(BaseAgent):
             )
             for indices in mini_batch_groups:
                 policy_loss, value_loss, entropy_loss, activity_loss = self._loss(batch, indices)
-                self._optimize_policy(policy_loss + entropy_loss + activity_loss)
-                self._optimize_value(value_loss)
+                policy_width_loss = self._width_penalty(self.policy_network)
+                value_width_loss = self._width_penalty(self.value_network)
+                self._optimize_policy(
+                    policy_loss + entropy_loss + activity_loss + policy_width_loss
+                )
+                self._optimize_value(value_loss + value_width_loss)
                 losses.append(
                     torch.stack(
                         [
@@ -702,6 +768,8 @@ class PPO(BaseAgent):
                             value_loss.detach(),
                             entropy_loss.detach(),
                             activity_loss.detach(),
+                            policy_width_loss.detach(),
+                            value_width_loss.detach(),
                         ]
                     )
                 )
@@ -747,16 +815,11 @@ class PPO(BaseAgent):
         self._policy_state = replay.policy_state
         self._value_state = replay.value_state
 
-        policy_loss, value_loss, entropy_loss, activity_loss = torch.stack(losses).mean(0)
-
         self.track_data("Learning / Policy updates", len(losses))
         self._track_distribution_statistics()
-        self.track_data("Loss / Policy loss", policy_loss.item())
-        self.track_data("Loss / Value loss", value_loss.item())
-        if self.cfg.spike_activity_loss_scale:
-            self.track_data("Loss / Spike activity loss", activity_loss.item())
-        if self.cfg.entropy_loss_scale:
-            self.track_data("Loss / Entropy loss", entropy_loss.item())
+        self._track_widths()
+
+        self._track_losses(losses)
         self.track_data(
             "Learning / Policy learning rate", self.policy_optimizer.param_groups[0]["lr"]
         )

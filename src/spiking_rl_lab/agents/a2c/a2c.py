@@ -242,8 +242,12 @@ class A2C(BaseAgent):
                 self._sequence_policy_states.append(detach_state(self._policy_state))
                 self._sequence_value_states.append(detach_state(self._value_state))
 
-            policy_features, self._policy_state = self.policy_network(inputs, self._policy_state)
-            values, self._value_state = self.value_network(inputs, self._value_state)
+            policy_features, self._policy_state = self.policy_network(
+                inputs, self._policy_state, normalize=True
+            )
+            values, self._value_state = self.value_network(
+                inputs, self._value_state, normalize=True
+            )
             distribution = self.policy.distribution(policy_features)
             actions = distribution.sample() if self.training else distribution.mode()
             if self.training:
@@ -362,8 +366,8 @@ class A2C(BaseAgent):
         torch.Tensor,
     ]:
         """Replay recurrent sequences and compute A2C losses."""
-        policy_state = batch.policy_state
-        value_state = batch.value_state
+        policy_state = self.policy_network.normalize_state(detach_state(batch.policy_state))
+        value_state = self.value_network.normalize_state(detach_state(batch.value_state))
         policy_outputs = []
         predicted_values = []
 

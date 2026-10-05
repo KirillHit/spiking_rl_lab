@@ -72,3 +72,18 @@ def select_state[StateT](state: StateT, indices: torch.Tensor) -> StateT:
     if isinstance(state, dict):
         return {key: select_state(value, indices) for key, value in state.items()}
     return state
+
+
+def reset_state_rows[StateT: tuple[torch.Tensor, ...]](
+    state: StateT,
+    initial_state: StateT,
+    dones: torch.Tensor,
+) -> StateT:
+    """Replace completed batch rows with the node's initial state."""
+    values = []
+    for value, initial_value in zip(state, initial_state, strict=True):
+        mask = dones.to(device=value.device, dtype=torch.bool).reshape(
+            -1, *([1] * (value.ndim - 1))
+        )
+        values.append(torch.where(mask, initial_value, value))
+    return type(state)(*values)

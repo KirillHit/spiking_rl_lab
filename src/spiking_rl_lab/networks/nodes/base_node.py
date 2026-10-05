@@ -79,6 +79,10 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
             raise NotImplementedError(msg)
         return None
 
+    def normalize_state(self, state: object) -> object:
+        """Choose equivalent bounded coordinates without resetting physical state."""
+        return state
+
     def initialize_parameters(self) -> None:
         """Initialize trainable parameters owned by this node.
 

@@ -136,7 +136,9 @@ class Reinforce(BaseAgent):
                 self._hidden_states = self.policy_network.initial_state(inputs)
             if self.training and self._rollout_initial_state is None:
                 self._rollout_initial_state = self._hidden_states
-            features, self._hidden_states = self.policy_network(inputs, self._hidden_states)
+            features, self._hidden_states = self.policy_network(
+                inputs, self._hidden_states, normalize=True
+            )
             distribution = self.policy.distribution(features)
             actions = distribution.sample() if self.training else distribution.mode()
 
@@ -230,7 +232,9 @@ class Reinforce(BaseAgent):
         policy_terms = []
         entropy_terms = []
 
-        hidden_states = self._rollout_initial_state
+        hidden_states = self.policy_network.normalize_state(
+            detach_state(self._rollout_initial_state)
+        )
         for step in range(rollout_steps):
             features, hidden_states = self.policy_network(observations[step], hidden_states)
             distribution = self.policy.distribution(features)
@@ -240,7 +244,7 @@ class Reinforce(BaseAgent):
                 entropy_terms.append(-self.cfg.entropy_loss_scale * distribution.entropy().mean())
             hidden_states = self.policy_network.reset_state(hidden_states, dones[step])
             if (step + 1) % self.cfg.sequence_length == 0:
-                hidden_states = detach_state(hidden_states)
+                hidden_states = self.policy_network.normalize_state(detach_state(hidden_states))
 
         policy_loss = torch.stack(policy_terms).mean()
         entropy_loss = (

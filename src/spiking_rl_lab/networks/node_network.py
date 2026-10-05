@@ -76,14 +76,31 @@ class NodeNetwork(nn.Module, ConfiguredBase):
             for layer, layer_state in zip(self._net, state, strict=True)
         ]
 
+    def normalize_state(self, state: ListState | None) -> ListState | None:
+        """Choose each node's bounded coordinates between gradient sequences."""
+        if state is None:
+            return None
+        return [
+            layer.normalize_state(layer_state)
+            for layer, layer_state in zip(self._net, state, strict=True)
+        ]
+
     def forward(
         self,
         inputs: torch.Tensor,
         state: ListState | None = None,
+        *,
+        normalize: bool = False,
     ) -> tuple[torch.Tensor, ListState]:
-        """Run the network without mutating the provided per-layer state."""
+        """Advance state and optionally normalize its equivalent coordinates.
+
+        Collection and evaluation request normalization; gradient sequences keep
+        continuous coordinates. Outputs are computed before normalization.
+        """
         previous_state = [None] * len(self._net) if state is None else state
         next_state = [None] * len(self._net)
         for idx, layer in enumerate(self._net):
             inputs, next_state[idx] = layer(inputs, previous_state[idx])
+        if normalize:
+            next_state = self.normalize_state(next_state)
         return inputs, next_state

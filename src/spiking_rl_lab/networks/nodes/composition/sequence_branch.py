@@ -96,6 +96,10 @@ class SequenceBranchNode(BaseNode):
         """Reset the sequence branch for finished environments."""
         return self._network.reset_state(state, dones)
 
+    def normalize_state(self, state: ListState | None) -> ListState | None:
+        """Normalize equivalent coordinates in the branch state."""
+        return self._network.normalize_state(state)
+
     def forward(
         self, inputs: torch.Tensor, state: ListState | None = None
     ) -> tuple[torch.Tensor, ListState]:

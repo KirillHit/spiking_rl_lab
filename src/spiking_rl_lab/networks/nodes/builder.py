@@ -32,6 +32,7 @@ NODE_MODULES = (
     "spiking_rl_lab.networks.nodes.decodings.population",
     "spiking_rl_lab.networks.nodes.standard.activations",
     "spiking_rl_lab.networks.nodes.spiking.activations",
+    "spiking_rl_lab.networks.nodes.spiking.ysskar",
 )
 NODE_REGISTRY: dict[str, type[BaseNode]] = {}
 NODE_SPEC = RegistrySpec[BaseNode](

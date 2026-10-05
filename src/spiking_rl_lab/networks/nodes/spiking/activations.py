@@ -11,6 +11,7 @@ from norse.torch.functional.threshold import threshold
 
 from spiking_rl_lab.networks.nodes.base_node import BaseNode
 from spiking_rl_lab.networks.nodes.builder import register_node
+from spiking_rl_lab.networks.state import reset_state_rows
 
 if TYPE_CHECKING:
     from spiking_rl_lab.networks.shape import TensorShape
@@ -21,21 +22,6 @@ class MembraneState(NamedTuple):
     """Membrane voltage carried between steps by LIF and LI nodes."""
 
     v: torch.Tensor
-
-
-def _reset_state_rows[StateT: tuple[torch.Tensor, ...]](
-    state: StateT,
-    initial_state: StateT,
-    dones: torch.Tensor,
-) -> StateT:
-    """Replace completed batch rows with the node's initial state."""
-    values = []
-    for value, initial_value in zip(state, initial_state, strict=True):
-        mask = dones.to(device=value.device, dtype=torch.bool).reshape(
-            -1, *([1] * (value.ndim - 1))
-        )
-        values.append(torch.where(mask, initial_value, value))
-    return type(state)(*values)
 
 
 @register_node("lif")
@@ -105,7 +91,7 @@ class LIFNode(BaseNode):
         """Restore completed environments to the LIF resting state."""
         if state is None:
             return None
-        return _reset_state_rows(state, self.initial_state(state.v), dones)
+        return reset_state_rows(state, self.initial_state(state.v), dones)
 
     def forward(
         self,
@@ -180,7 +166,7 @@ class LINode(BaseNode):
         """Restore completed environments to the integrator resting state."""
         if state is None:
             return None
-        return _reset_state_rows(state, self.initial_state(state.v), dones)
+        return reset_state_rows(state, self.initial_state(state.v), dones)
 
     def forward(
         self,
