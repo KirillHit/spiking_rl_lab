@@ -1,0 +1,96 @@
+# @package _global_
+# Fixed-width recurrent Ysskar policy on Ant-v5.
+env:
+  name: gymnasium
+  params:
+    id: Ant-v5
+    n_envs: 32
+    render: false
+agent:
+  name: ppo
+  params:
+    policy_network:
+      nodes:
+      - name: linear
+        params:
+          out_features: 256
+      - name: ysskar
+        params:
+          compile: true
+          dt: 0.05
+          tau: 0.03
+          learnable_tau: true
+          width: 0.3
+          learnable_width: false
+          asymmetry: 0.8
+      - name: linear
+        params:
+          out_features: 16
+    value_network:
+      nodes:
+      - name: linear
+        params:
+          out_features: 256
+      - name: torch_activation
+        params:
+          activation: relu
+      - name: linear
+        params:
+          out_features: 256
+      - name: torch_activation
+        params:
+          activation: relu
+      - name: linear
+        params:
+          out_features: 1
+    device: cpu
+    policy:
+      name: beta
+      params:
+        learnable_bias: true
+    rollouts: 256
+    sequence_length: 16
+    state_burn_in: 64
+    learning_epochs: 8
+    mini_batches: 4
+    ratio_clip: 0.2
+    value_clip: 0.0
+    value_loss_scale: 0.5
+    kl_threshold: 0.03
+    discount_factor: 0.99
+    gae_lambda: 0.95
+    policy_learning_rate: 0.0003
+    value_learning_rate: 0.001
+    policy_learning_rate_scheduler: null
+    value_learning_rate_scheduler: null
+    observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
+    policy_grad_norm_clip: 0.5
+    value_grad_norm_clip: 0.5
+    entropy_loss_scale: 0.001
+    width_loss_scale: 0.0
+    width_target: 0.0001
+    spike_activity_loss_scale: 0.0
+    time_limit_bootstrap: true
+    rewards_shaper: null
+    experiment:
+      checkpoint_interval: 100000
+      write_interval: 5000
+runner:
+  mode: train
+  seed: 42
+  deterministic: true
+  experiment_name: ppo_ant_ynn
+  output_dir: ${hydra:runtime.output_dir}
+  checkpoint_path: null
+  demo_fps: 20.0
+  dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
+  dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
+trainer:
+  params:
+    timesteps: 2000000
+    headless: true
+    close_environment_at_exit: false
+    validation:
+      episodes: 32
+      min_interval: 10000
+      max_interval: 50000

@@ -1,9 +1,9 @@
 # @package _global_
-# PPO with one recurrent Ysskar population and a constant width penalty.
+# PPO with a recurrent Ysskar population on Pendulum-v1.
 env:
   name: gymnasium
   params:
-    id: CartPole-v1
+    id: Pendulum-v1
     n_envs: 8
     render: false
 
@@ -12,31 +12,40 @@ agent:
   params:
     policy_network:
       nodes:
+        - name: population_code
+          params:
+            neurons_per_feature: 16
+            sigma: 0.3
         - name: linear
           params:
             out_features: 128
         - name: ysskar
           params:
-            compile: true  # Compile only this node; first calls include compilation time.
-            dt: 0.02
+            compile: true
+            dt: 0.05
             tau: 0.03
-            width: 0.03
+            width: 0.3
             learnable_width: true
             asymmetry: 0.8
         - name: linear
           params:
             out_features: 2
+        - name: li
+          params:
+            decay: 0.8
+            learnable_decay: true
+            normalize_input: true
     value_network:
       nodes:
         - name: linear
           params:
-            out_features: 64
+            out_features: 128
         - name: torch_activation
           params:
             activation: relu
         - name: linear
           params:
-            out_features: 64
+            out_features: 128
         - name: torch_activation
           params:
             activation: relu
@@ -45,10 +54,12 @@ agent:
             out_features: 1
     device: cpu
     policy:
-      name: categorical
+      name: beta
+      params:
+        learnable_bias: true
     rollouts: 128
-    sequence_length: 32  # Continuous phase within each BPTT sequence.
-    state_burn_in: 128  # Reconstruct state from preceding transitions.
+    sequence_length: 32
+    state_burn_in: 128
     learning_epochs: 4
     mini_batches: 4
     ratio_clip: 0.2
@@ -57,40 +68,40 @@ agent:
     kl_threshold: 0.03
     discount_factor: 0.99
     gae_lambda: 0.95
-    policy_learning_rate: 1.5e-3
-    value_learning_rate: 1e-3
+    policy_learning_rate: 0.003
+    value_learning_rate: 0.001
     policy_learning_rate_scheduler: null
     value_learning_rate_scheduler: null
     observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
     policy_grad_norm_clip: 0.5
     value_grad_norm_clip: 0.5
-    entropy_loss_scale: 0.0
-    width_loss_scale: 0.001
+    entropy_loss_scale: 0.001
+    width_loss_scale: 0.0001
     width_target: 0.0001
-    spike_activity_loss_scale: 0.0  # Signed charge is not a binary spike count.
+    spike_activity_loss_scale: 0.0
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:
-      checkpoint_interval: 2048
+      checkpoint_interval: 4096
       write_interval: 128
 
 runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_cartpole_ynn
+  experiment_name: ppo_pendulum_ynn
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
-  demo_fps: 50.0
+  demo_fps: 20.0
   dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
   dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
 
 trainer:
   params:
-    timesteps: 65536  # 524288 transitions across 8 environments.
+    timesteps: 163840  # 1310720 transitions across 8 environments.
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 20
+      episodes: 100
       min_interval: 1024
       max_interval: 2048

@@ -37,6 +37,9 @@ class YsskarNeuron(BaseNode):
         tau: float = 0.03
         """Dynamics time scale, current decays with tau / 2."""
 
+        learnable_tau: bool = False
+        """Learn a separate time scale for each neuron."""
+
         width: float = 0.03
         """Half the charge lies within +/- 2 * atan(width) of the spike center."""
 
@@ -67,13 +70,22 @@ class YsskarNeuron(BaseNode):
                 raise ValueError(msg)
 
     def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
-        """Initialize the shared width and optionally compile the node in place."""
+        """Initialize neuron parameters and optionally compile the node in place."""
         super().__init__(cfg, input_shape)
+        self.register_parameter("_log_tau", None)
+        if cfg.learnable_tau:
+            tau_shape = (int(input_shape.dims[0]),) + (1,) * (len(input_shape.dims) - 1)
+            self._log_tau = torch.nn.Parameter(torch.full(tau_shape, math.log(cfg.tau)))
         self.register_parameter("_width_logit", None)
         if cfg.learnable_width:
             self._width_logit = torch.nn.Parameter(torch.logit(torch.tensor(cfg.width)))
         if cfg.compile:
             self.compile(backend="inductor", fullgraph=True, dynamic=False)
+
+    @property
+    def tau(self) -> torch.Tensor | float:
+        """Return the positive dynamics time scale."""
+        return self._log_tau.exp() if self._log_tau is not None else self._cfg.tau
 
     @property
     def width(self) -> torch.Tensor | float:
@@ -125,9 +137,10 @@ class YsskarNeuron(BaseNode):
         half = phi / 2 - math.pi / 4
         sine, cosine = half.sin(), half.cos()
         numerator = (sine + (1 + current) * cosine) / 2
-        elapsed = self._cfg.dt / self._cfg.tau
-        decay = math.exp(-elapsed)
-        decay_delta = math.expm1(-elapsed)
+        tau = torch.as_tensor(self.tau, device=phi.device, dtype=phi.dtype)
+        elapsed = self._cfg.dt / tau
+        decay = torch.exp(-elapsed)
+        decay_delta = torch.expm1(-elapsed)
         next_denominator = cosine + decay_delta * numerator
         next_current = current * decay**2
         next_sine = 2 * decay * numerator - (1 + next_current) * next_denominator
