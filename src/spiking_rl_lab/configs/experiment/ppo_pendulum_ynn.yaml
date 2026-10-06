@@ -19,6 +19,7 @@ agent:
         - name: linear
           params:
             out_features: 128
+            bias: false
         - name: ysskar
           params:
             compile: true
@@ -30,6 +31,7 @@ agent:
         - name: linear
           params:
             out_features: 2
+            bias: false
         - name: li
           params:
             decay: 0.8

@@ -15,6 +15,7 @@ agent:
         - name: linear
           params:
             out_features: 128
+            bias: false
         - name: ysskar
           params:
             compile: true  # Compile only this node; first calls include compilation time.
@@ -26,6 +27,7 @@ agent:
         - name: linear
           params:
             out_features: 2
+            bias: false
     value_network:
       nodes:
         - name: linear

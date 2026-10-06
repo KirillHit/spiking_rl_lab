@@ -30,6 +30,7 @@ NODE_MODULES = (
     "spiking_rl_lab.networks.nodes.encodings.population",
     "spiking_rl_lab.networks.nodes.decodings.opponent",
     "spiking_rl_lab.networks.nodes.decodings.population",
+    "spiking_rl_lab.networks.nodes.decodings.li_current",
     "spiking_rl_lab.networks.nodes.standard.activations",
     "spiking_rl_lab.networks.nodes.spiking.activations",
     "spiking_rl_lab.networks.nodes.spiking.ysskar",
