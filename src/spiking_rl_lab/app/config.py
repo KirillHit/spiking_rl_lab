@@ -53,6 +53,7 @@ class OptunaParameter:
     high: float | None = None  # Upper bound (for float/int)
     log: bool = False  # Whether to use log scale (for float)
     choices: list | None = None  # List of possible values (for categorical)
+    linked_parameters: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -65,6 +66,9 @@ class OptunaConfig:
     n_jobs: int = 1
     timeout: float | None = None  # Seconds; a running trial is allowed to finish.
     direction: str = "maximize"
+    sampler_kwargs: dict[str, Any] = field(default_factory=dict)
+    heartbeat_interval: int | None = None
+    grace_period: int | None = None
     parameters: list[OptunaParameter] = field(default_factory=list)  # List of parameters
 
 

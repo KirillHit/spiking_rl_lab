@@ -12,6 +12,7 @@ import tqdm
 from skrl.trainers.torch import SequentialTrainer, SequentialTrainerCfg
 from skrl.utils import ScopedTimer
 
+from spiking_rl_lab.core.validation import require_positive
 from spiking_rl_lab.trainers.validator import ValidationConfig, Validator
 
 if TYPE_CHECKING:
@@ -26,11 +27,14 @@ class TrainerConfig(SequentialTrainerCfg):
     """Sequential trainer settings with validation."""
 
     validation: ValidationConfig = field(default_factory=ValidationConfig)
+    max_training_seconds: float | None = None
 
     def __post_init__(self) -> None:
         """Build the nested validation configuration."""
         if not isinstance(self.validation, ValidationConfig):
             self.validation = ValidationConfig(**self.validation)
+        if self.max_training_seconds is not None:
+            require_positive("max_training_seconds", self.max_training_seconds)
 
 
 class Trainer(SequentialTrainer):
@@ -105,6 +109,7 @@ class Trainer(SequentialTrainer):
 
     def train(self) -> None:
         """Train the agent and run scheduled validation between interactions."""
+        started_at = time.monotonic()
         if self.num_simultaneous_agents != 1:
             msg = "Validation trainer supports one agent"
             raise RuntimeError(msg)
@@ -123,6 +128,7 @@ class Trainer(SequentialTrainer):
             smoothing=0.01,
         )
         for timestep in progress:
+            self._check_training_deadline(started_at)
             agent.pre_interaction(timestep=timestep, timesteps=timesteps)
 
             with torch.no_grad():
@@ -190,6 +196,13 @@ class Trainer(SequentialTrainer):
                 result.log_mlflow(timestep + 1)
                 if timestep + 1 < timesteps and result.validate():
                     self._update_curriculum(result)
+
+    def _check_training_deadline(self, started_at: float) -> None:
+        """Reject incomplete runs after the cooperative training time budget."""
+        limit = self.cfg.max_training_seconds
+        if limit is not None and time.monotonic() - started_at >= limit:
+            msg = f"Training exceeded {limit:g} seconds"
+            raise TimeoutError(msg)
 
     def _reset_curriculum(self) -> None:
         """Reset curriculum before training."""

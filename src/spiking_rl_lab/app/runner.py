@@ -126,6 +126,8 @@ class Runner:
                 optuna.storages.RDBStorage(
                     cfg.optuna.storage,
                     engine_kwargs={"pool_pre_ping": True, "pool_recycle": 300},
+                    heartbeat_interval=cfg.optuna.heartbeat_interval,
+                    grace_period=cfg.optuna.grace_period,
                 )
                 if cfg.optuna.storage is not None
                 else None
@@ -135,6 +137,7 @@ class Runner:
                 study_name=cfg.optuna.study_name,
                 direction=cfg.optuna.direction,
                 load_if_exists=cfg.optuna.storage is not None,
+                sampler=optuna.samplers.TPESampler(**cfg.optuna.sampler_kwargs),
             )
             study.optimize(
                 lambda trial: self._objective(trial, cfg, run.info.run_id),
@@ -143,6 +146,9 @@ class Runner:
                 timeout=cfg.optuna.timeout,
                 catch=(Exception,),
             )
+            if not any(t.state == optuna.trial.TrialState.COMPLETE for t in study.trials):
+                log.warning("No completed trials in study '%s'", study.study_name)
+                return
             best_run_id = study.best_trial.user_attrs["mlflow_run_id"]
             client = mlflow.tracking.MlflowClient()
             client.set_tag(best_run_id, "optuna.best_trial", "true")
@@ -180,11 +186,9 @@ class Runner:
             ),
         )
         for parameter in trial_cfg.optuna.parameters:
-            set_config_value(
-                trial_cfg,
-                parameter.parameter,
-                suggest_value(trial, parameter),
-            )
+            value = suggest_value(trial, parameter)
+            for path in (parameter.parameter, *parameter.linked_parameters):
+                set_config_value(trial_cfg, path, value)
 
         try:
             with mlflow.start_run(
@@ -216,7 +220,10 @@ class Runner:
         try:
             with self._trainer_context(cfg) as trainer:
                 log.info("Starting training...")
-                trainer.train()
+                try:
+                    trainer.train()
+                except TimeoutError:
+                    log.warning("Training timed out, using the best validation score")
                 score = trainer.validation_score
 
             best_checkpoint = cfg.runner.output_dir / "checkpoints" / "best_agent.pt"
