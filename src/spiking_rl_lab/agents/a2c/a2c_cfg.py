@@ -80,9 +80,6 @@ class A2CConfig(BaseAgent.Config):
     entropy_loss_scale: float = 0.0
     """Entropy regularization coefficient added to the policy loss."""
 
-    spike_activity_loss_scale: float = 0.0
-    """Mean squared neuron firing-rate penalty coefficient. Set to ``0`` to disable."""
-
     time_limit_bootstrap: bool = False
     """Whether to bootstrap returns at time-limit truncations."""
 
@@ -110,7 +107,6 @@ class A2CConfig(BaseAgent.Config):
         require_minimum("policy_grad_norm_clip", self.policy_grad_norm_clip, minimum=0.0)
         require_minimum("value_grad_norm_clip", self.value_grad_norm_clip, minimum=0.0)
         require_minimum("entropy_loss_scale", self.entropy_loss_scale, minimum=0.0)
-        require_minimum("spike_activity_loss_scale", self.spike_activity_loss_scale, minimum=0.0)
         self.policy_learning_rate_scheduler = require_optional_class(
             "policy_learning_rate_scheduler", self.policy_learning_rate_scheduler
         )

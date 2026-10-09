@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 from spiking_rl_lab.core.factory import ConfiguredBase
+from spiking_rl_lab.core.validation import require_minimum
 from spiking_rl_lab.networks.nodes.builder import NodeConfig, build_node
 
 if TYPE_CHECKING:
@@ -22,8 +23,12 @@ class NodeNetworkConfig:
 
     nodes: list[NodeConfig] = dataclasses.field(default_factory=list)
 
+    substeps: int = 1
+    """Internal network ticks per observation, return the final tick output."""
+
     def __post_init__(self) -> None:
         """Convert YAML node mappings to typed node configs."""
+        require_minimum("substeps", self.substeps, minimum=1)
         self.nodes = [
             node if isinstance(node, NodeConfig) else NodeConfig(**node) for node in self.nodes
         ]
@@ -82,8 +87,12 @@ class NodeNetwork(nn.Module, ConfiguredBase):
         state: ListState | None = None,
     ) -> tuple[torch.Tensor, ListState]:
         """Run the network without mutating the provided per-layer state."""
-        previous_state = [None] * len(self._net) if state is None else state
-        next_state = [None] * len(self._net)
-        for idx, layer in enumerate(self._net):
-            inputs, next_state[idx] = layer(inputs, previous_state[idx])
-        return inputs, next_state
+        state = [None] * len(self._net) if state is None else state
+        for _ in range(self._cfg.substeps):
+            outputs = inputs
+            next_state = []
+            for layer, layer_state in zip(self._net, state, strict=True):
+                outputs, next_layer_state = layer(outputs, layer_state)
+                next_state.append(next_layer_state)
+            state = next_state
+        return outputs, state

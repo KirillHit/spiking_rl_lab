@@ -5,7 +5,6 @@ from __future__ import annotations
 import dataclasses
 import logging
 import time
-from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
@@ -20,16 +19,12 @@ from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.validation import require_shape_fields
 from spiking_rl_lab.envs.observations import bootstrap_observations
 from spiking_rl_lab.networks.node_network import NodeNetwork
+from spiking_rl_lab.networks.nodes.statistics import collect_node_statistics
 from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape
 from spiking_rl_lab.networks.state import (
     ListState,
     concatenate_states,
     detach_state,
-)
-from spiking_rl_lab.networks.statistics.activity import (
-    collect_forward_outputs,
-    mean_spike_activity,
-    spike_activity_moments,
 )
 from spiking_rl_lab.networks.statistics.normalization import (
     apply_collected_batch_norm_statistics,
@@ -367,11 +362,18 @@ class A2C(BaseAgent):
         policy_outputs = []
         predicted_values = []
 
-        with collect_forward_outputs(
-            self.policy_network,
-            partial(mean_spike_activity, dim=0),
-            detach=not self.cfg.spike_activity_loss_scale,
-        ) as activity_terms:
+        with (
+            collect_node_statistics(
+                self.policy_network,
+                progress=self._training_progress,
+                collect_metrics=self.write_interval > 0,
+            ) as policy_statistics,
+            collect_node_statistics(
+                self.value_network,
+                progress=self._training_progress,
+                collect_metrics=self.write_interval > 0,
+            ) as value_statistics,
+        ):
             for step in range(self.cfg.sequence_length):
                 policy_features, policy_state = self.policy_network(
                     batch.observations[step], policy_state
@@ -391,28 +393,17 @@ class A2C(BaseAgent):
             else torch.zeros((), device=self.device)
         )
 
-        neuron_activity = {
-            name: torch.stack(layer_terms).mean(dim=0)
-            for name, layer_terms in activity_terms.items()
-        }
-        layer_activity = {name: rates.mean() for name, rates in neuron_activity.items()}
-        if neuron_activity:
-            mean_activity, activity_penalty = spike_activity_moments(neuron_activity)
-        else:
-            mean_activity = activity_penalty = torch.zeros((), device=self.device)
-        activity_loss = self.cfg.spike_activity_loss_scale * activity_penalty
+        regularization_loss = self._node_statistics_loss(policy_statistics, "Policy")
+        value_loss = value_loss + self._node_statistics_loss(value_statistics, "Value")
 
-        for name, activity in layer_activity.items():
-            self.track_data(f"Activity / {name}", activity.item())
-        if layer_activity:
-            self.track_data("Activity / Mean", mean_activity.item())
-
-        return policy_loss, value_loss, entropy_loss, activity_loss
+        return policy_loss, value_loss, entropy_loss, regularization_loss
 
     def update(self, *, timestep: int, timesteps: int) -> None:
         """Update the policy and value networks from the collected rollout."""
         if not self.memory.filled:
             return
+
+        self._training_progress = (timestep + 1) / timesteps
 
         next_inputs = torch.flatten(
             self._observation_preprocessor(self._next_observation, train=False), start_dim=1
@@ -431,10 +422,10 @@ class A2C(BaseAgent):
 
         batch = self._build_sequence_batch(returns, advantages)
         with collect_batch_norm_statistics(self.policy_network, self.value_network):
-            policy_loss, value_loss, entropy_loss, activity_loss = self._loss(batch)
+            policy_loss, value_loss, entropy_loss, regularization_loss = self._loss(batch)
             self.policy_optimizer.zero_grad(set_to_none=True)
             self.value_optimizer.zero_grad(set_to_none=True)
-            (policy_loss + value_loss + entropy_loss + activity_loss).backward()
+            (policy_loss + value_loss + entropy_loss + regularization_loss).backward()
 
         if self.cfg.policy_grad_norm_clip:
             torch.nn.utils.clip_grad_norm_(self._policy_parameters, self.cfg.policy_grad_norm_clip)
@@ -453,8 +444,6 @@ class A2C(BaseAgent):
 
         self.track_data("Loss / Policy loss", policy_loss.item())
         self.track_data("Loss / Value loss", value_loss.item())
-        if self.cfg.spike_activity_loss_scale:
-            self.track_data("Loss / Spike activity loss", activity_loss.item())
         if self.cfg.entropy_loss_scale:
             self.track_data("Loss / Entropy loss", entropy_loss.item())
         self.track_data(

@@ -5,7 +5,6 @@ from __future__ import annotations
 import dataclasses
 import logging
 import time
-from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
@@ -22,6 +21,7 @@ from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.validation import require_shape_fields
 from spiking_rl_lab.envs.observations import bootstrap_observations
 from spiking_rl_lab.networks.node_network import NodeNetwork
+from spiking_rl_lab.networks.nodes.statistics import collect_node_statistics
 from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape
 from spiking_rl_lab.networks.state import (
     ListState,
@@ -29,11 +29,6 @@ from spiking_rl_lab.networks.state import (
     detach_state,
     has_hidden_state,
     select_state,
-)
-from spiking_rl_lab.networks.statistics.activity import (
-    collect_forward_outputs,
-    mean_spike_activity,
-    spike_activity_moments,
 )
 from spiking_rl_lab.networks.statistics.normalization import (
     apply_collected_batch_norm_statistics,
@@ -69,6 +64,8 @@ class _BurnIn:
 
     observations: torch.Tensor
     dones: torch.Tensor
+    policy_state: ListState | None = None
+    value_state: ListState | None = None
 
 
 @dataclasses.dataclass(slots=True)
@@ -80,6 +77,8 @@ class _ReplayResult:
     value_state: ListState | None = None
     sequence_policy_state: ListState | None = None
     sequence_value_state: ListState | None = None
+    burn_in_policy_state: ListState | None = None
+    burn_in_value_state: ListState | None = None
 
 
 @dataclasses.dataclass(slots=True)
@@ -407,11 +406,18 @@ class PPO(BaseAgent):
         policy_outputs = []
         predicted_values = []
 
-        with collect_forward_outputs(
-            self.policy_network,
-            partial(mean_spike_activity, dim=0),
-            detach=not self.cfg.spike_activity_loss_scale,
-        ) as activity_terms:
+        with (
+            collect_node_statistics(
+                self.policy_network,
+                progress=self._training_progress,
+                collect_metrics=self.write_interval > 0,
+            ) as policy_statistics,
+            collect_node_statistics(
+                self.value_network,
+                progress=self._training_progress,
+                collect_metrics=self.write_interval > 0,
+            ) as value_statistics,
+        ):
             for step in range(self.cfg.sequence_length):
                 policy_output, policy_state = self.policy_network(observations[step], policy_state)
                 values, value_state = self.value_network(observations[step], value_state)
@@ -447,23 +453,10 @@ class PPO(BaseAgent):
             else torch.zeros((), device=self.device)
         )
 
-        neuron_activity = {
-            name: torch.stack(layer_terms).mean(dim=0)
-            for name, layer_terms in activity_terms.items()
-        }
-        layer_activity = {name: rates.mean() for name, rates in neuron_activity.items()}
-        if neuron_activity:
-            mean_activity, activity_penalty = spike_activity_moments(neuron_activity)
-        else:
-            mean_activity = activity_penalty = torch.zeros((), device=self.device)
-        activity_loss = self.cfg.spike_activity_loss_scale * activity_penalty
+        regularization_loss = self._node_statistics_loss(policy_statistics, "Policy")
+        value_loss = value_loss + self._node_statistics_loss(value_statistics, "Value")
 
-        for name, activity in layer_activity.items():
-            self.track_data(f"Activity / {name}", activity.item())
-        if layer_activity:
-            self.track_data("Activity / Mean", mean_activity.item())
-
-        return policy_loss, value_loss, entropy_loss, activity_loss
+        return policy_loss, value_loss, entropy_loss, regularization_loss
 
     @torch.no_grad()
     def _burn_in_states(
@@ -473,12 +466,30 @@ class PPO(BaseAgent):
         policy_stateful: bool,
         value_stateful: bool,
     ) -> tuple[ListState | None, ListState | None]:
-        """Reconstruct states at the beginning of a rollout."""
-        initial_inputs = self._burn_in.observations[0] if self._burn_in else observations[0]
-        policy_state = (
-            self.policy_network.initial_state(initial_inputs) if policy_stateful else None
-        )
-        value_state = self.value_network.initial_state(initial_inputs) if value_stateful else None
+        """Initialize the replay boundary and advance any preceding burn-in steps."""
+        if self.cfg.use_saved_replay_state:
+            policy_state = (
+                detach_state(
+                    self._burn_in.policy_state if self._burn_in else self._sequence_policy_states[0]
+                )
+                if policy_stateful
+                else None
+            )
+            value_state = (
+                detach_state(
+                    self._burn_in.value_state if self._burn_in else self._sequence_value_states[0]
+                )
+                if value_stateful
+                else None
+            )
+        else:
+            initial_inputs = self._burn_in.observations[0] if self._burn_in else observations[0]
+            policy_state = (
+                self.policy_network.initial_state(initial_inputs) if policy_stateful else None
+            )
+            value_state = (
+                self.value_network.initial_state(initial_inputs) if value_stateful else None
+            )
 
         if not self._burn_in or not (policy_stateful or value_stateful):
             return policy_state, value_state
@@ -513,6 +524,9 @@ class PPO(BaseAgent):
         sequence_policy_states = []
         sequence_value_states = []
         log_ratios = []
+        burn_in_policy_state = None
+        burn_in_value_state = None
+        burn_in_start = len(rollout.observations) - self.cfg.state_burn_in
         for step, (step_observations, step_actions, step_old_log_prob, step_dones) in enumerate(
             zip(
                 rollout.observations,
@@ -522,6 +536,9 @@ class PPO(BaseAgent):
                 strict=True,
             )
         ):
+            if self.cfg.use_saved_replay_state and step == burn_in_start:
+                burn_in_policy_state = detach_state(policy_state)
+                burn_in_value_state = detach_state(value_state)
             if step % self.cfg.sequence_length == 0:
                 if policy_stateful:
                     sequence_policy_states.append(detach_state(policy_state))
@@ -545,6 +562,8 @@ class PPO(BaseAgent):
 
         return _ReplayResult(
             approximate_kl=approximate_kl,
+            burn_in_policy_state=burn_in_policy_state,
+            burn_in_value_state=burn_in_value_state,
             policy_state=detach_state(policy_state) if policy_stateful else None,
             value_state=detach_state(value_state) if value_stateful else None,
             sequence_policy_state=(
@@ -589,15 +608,16 @@ class PPO(BaseAgent):
             batch.value_state = replay.sequence_value_state
         return replay
 
-    def _remember_burn_in(self, rollout: _Rollout) -> None:
-        """Retain the end of this rollout for the next rollout's burn-in."""
+    def _remember_burn_in(self, rollout: _Rollout, replay: _ReplayResult) -> None:
+        """Retain burn-in observations and their refreshed starting state."""
         if not self.cfg.state_burn_in:
             self._burn_in = None
             return
-
         self._burn_in = _BurnIn(
             observations=rollout.observations[-self.cfg.state_burn_in :].detach().clone(),
             dones=rollout.dones[-self.cfg.state_burn_in :].detach().clone(),
+            policy_state=replay.burn_in_policy_state,
+            value_state=replay.burn_in_value_state,
         )
 
     @torch.no_grad()
@@ -667,6 +687,8 @@ class PPO(BaseAgent):
         if not self.memory.filled:
             return
 
+        self._training_progress = (timestep + 1) / timesteps
+
         rollout = self._read_rollout()
         next_inputs = torch.flatten(
             self._observation_preprocessor(self._next_observation, train=False), start_dim=1
@@ -692,8 +714,10 @@ class PPO(BaseAgent):
                 self.cfg.mini_batches
             )
             for indices in mini_batch_groups:
-                policy_loss, value_loss, entropy_loss, activity_loss = self._loss(batch, indices)
-                self._optimize_policy(policy_loss + entropy_loss + activity_loss)
+                policy_loss, value_loss, entropy_loss, regularization_loss = self._loss(
+                    batch, indices
+                )
+                self._optimize_policy(policy_loss + entropy_loss + regularization_loss)
                 self._optimize_value(value_loss)
                 losses.append(
                     torch.stack(
@@ -701,7 +725,7 @@ class PPO(BaseAgent):
                             policy_loss.detach(),
                             value_loss.detach(),
                             entropy_loss.detach(),
-                            activity_loss.detach(),
+                            regularization_loss.detach(),
                         ]
                     )
                 )
@@ -747,14 +771,12 @@ class PPO(BaseAgent):
         self._policy_state = replay.policy_state
         self._value_state = replay.value_state
 
-        policy_loss, value_loss, entropy_loss, activity_loss = torch.stack(losses).mean(0)
+        policy_loss, value_loss, entropy_loss, regularization_loss = torch.stack(losses).mean(0)
 
         self.track_data("Learning / Policy updates", len(losses))
         self._track_distribution_statistics()
         self.track_data("Loss / Policy loss", policy_loss.item())
         self.track_data("Loss / Value loss", value_loss.item())
-        if self.cfg.spike_activity_loss_scale:
-            self.track_data("Loss / Spike activity loss", activity_loss.item())
         if self.cfg.entropy_loss_scale:
             self.track_data("Loss / Entropy loss", entropy_loss.item())
         self.track_data(
@@ -764,7 +786,7 @@ class PPO(BaseAgent):
             "Learning / Value learning rate", self.value_optimizer.param_groups[0]["lr"]
         )
 
-        self._remember_burn_in(rollout)
+        self._remember_burn_in(rollout, replay)
         self._reset_rollout()
 
     def _step_schedulers(self, approximate_kl: float) -> None:

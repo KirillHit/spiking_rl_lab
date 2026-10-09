@@ -1,9 +1,9 @@
 # @package _global_
-# PPO with an SNN categorical policy and a feed-forward value network on CartPole-v1.
+# PPO with a BTN Beta policy and a feed-forward value network on Ant-v5.
 env:
   name: gymnasium
   params:
-    id: CartPole-v1
+    id: Ant-v5
     n_envs: 32
     render: false
 
@@ -21,36 +21,34 @@ agent:
         - name: linear
           params:
             out_features: 256
-            bias: false
-        - name: lif
+            bias: true
+        - name: binary_activation
           params:
-            activity_scale: 0.025
-            decay: 0.6
-            normalize_input: true
-            v_th: 0.25
-            shared_decay: false
-            learnable_v_th: true
-        - name: linear
+            activation: relu
+            threshold: 0.5
+            hard: false
+            binary_scale: 0.1
+            activity_scale: 0.0
+            regularization_ramp_fraction: 0.5
+        - name: temporal_linear
           params:
             out_features: 256
-            bias: false
-        - name: lif
+            window: 16
+            bias: true
+        - name: binary_activation
           params:
-            activity_scale: 0.025
-            decay: 0.6
-            normalize_input: true
-            v_th: 0.25
-            shared_decay: false
-            learnable_v_th: true
-        - name: linear
+            activation: relu
+            threshold: 0.5
+            hard: false
+            binary_scale: 0.1
+            activity_scale: 0.0
+            regularization_ramp_fraction: 0.5
+        - name: temporal_linear
           params:
-            out_features: 2
-            bias: false
-        - name: li
-          params:
-            decay: 0.8
-            normalize_input: true
-            shared_decay: false
+            out_features: 16
+            window: 16
+            bias: true
+      substeps: 16
     value_network:
       nodes:
         - name: linear
@@ -67,13 +65,20 @@ agent:
             activation: relu
         - name: linear
           params:
-            out_features: 1
+            out_features: 16
+      substeps: 1
     device: cpu
     policy:
-      name: categorical
+      name: beta
+      params:
+        learnable_concentration: false
+        learnable_bias: true
+        b_common_init: 0.0
+        b_diff_init: 0.0
     rollouts: 256
     sequence_length: 8
-    state_burn_in: 32
+    state_burn_in: 0
+    use_saved_replay_state: true
     learning_epochs: 4
     mini_batches: 8
     ratio_clip: 0.2
@@ -100,25 +105,25 @@ agent:
     rewards_shaper: null
     experiment:
       checkpoint_interval: 100000
-      write_interval: 1000
+      write_interval: 5000
 
 runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_cartpole
+  experiment_name: ppo_ant
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
-  demo_fps: 50.0
+  demo_fps: 20.0
   dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
   dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
 
 trainer:
   params:
-    timesteps: 20000
+    timesteps: 2000000
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 100
-      min_interval: 1000
-      max_interval: 2000
+      episodes: 32
+      min_interval: 10000
+      max_interval: 50000

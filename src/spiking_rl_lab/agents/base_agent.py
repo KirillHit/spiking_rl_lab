@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import mlflow
 import numpy as np
+import torch
 from skrl.agents.torch import Agent
 from skrl.agents.torch import AgentCfg as SkrlAgentConfig
 
@@ -17,9 +18,10 @@ from spiking_rl_lab.core.factory import ConfiguredBase
 if TYPE_CHECKING:
     from collections.abc import Collection
 
-    import torch
     from skrl.envs.wrappers.torch import Wrapper
     from skrl.memories.torch import Memory
+
+    from spiking_rl_lab.networks.nodes.statistics import NodeStatistics
 
 
 class BaseAgent(Agent, ConfiguredBase, ABC):
@@ -52,6 +54,26 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
         self.memory = self.build_memory(env=env)
         self.last_tracking_metrics: dict[str, float] = {}
         self._tracking_ready: torch.Tensor | None = None
+        self._training_progress = 0.0
+
+    def _node_statistics_loss(
+        self, statistics: dict[str, NodeStatistics], network_name: str
+    ) -> torch.Tensor:
+        """Sum independent node penalties and log node-defined scalar metrics."""
+        terms = []
+        for name, result in statistics.items():
+            for metric_name, value in result.metrics.items():
+                self.track_data(f"{network_name} / {name} / {metric_name}", value.item())
+            if result.loss is not None:
+                terms.append(result.loss)
+                self.track_data(
+                    f"Regularization / {network_name} / {name}", result.loss.detach().item()
+                )
+        if not terms:
+            return torch.zeros((), device=self.device)
+        loss = torch.stack(terms).sum()
+        self.track_data(f"Loss / {network_name} regularization loss", loss.detach().item())
+        return loss
 
     @abstractmethod
     def build_memory(self, *, env: Wrapper) -> Memory | None:

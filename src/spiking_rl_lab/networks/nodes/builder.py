@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 NODE_MODULES = (
     "spiking_rl_lab.networks.nodes.standard.linear",
+    "spiking_rl_lab.networks.nodes.spiking.temporal_linear",
     "spiking_rl_lab.networks.nodes.standard.normalization",
     "spiking_rl_lab.networks.nodes.standard.convolutions",
     "spiking_rl_lab.networks.nodes.composition.skip",
@@ -31,7 +32,8 @@ NODE_MODULES = (
     "spiking_rl_lab.networks.nodes.decodings.opponent",
     "spiking_rl_lab.networks.nodes.decodings.population",
     "spiking_rl_lab.networks.nodes.standard.activations",
-    "spiking_rl_lab.networks.nodes.spiking.activations",
+    "spiking_rl_lab.networks.nodes.spiking.binary_activation",
+    "spiking_rl_lab.networks.nodes.spiking.lif_activation",
 )
 NODE_REGISTRY: dict[str, type[BaseNode]] = {}
 NODE_SPEC = RegistrySpec[BaseNode](

@@ -13,6 +13,7 @@ from torch import nn
 from spiking_rl_lab.core.factory import ConfiguredBase
 
 if TYPE_CHECKING:
+    from spiking_rl_lab.networks.nodes.statistics import NodeStatisticsAccumulator
     from spiking_rl_lab.networks.shape import TensorShape
     from spiking_rl_lab.networks.state import ListState
 
@@ -86,6 +87,15 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
         trainable layers should override this hook when they need a deliberate
         initialization scheme.
         """
+
+    def create_statistics(
+        self, *, progress: float, collect_metrics: bool = False
+    ) -> NodeStatisticsAccumulator | None:
+        """Create a fresh accumulator, or None when no statistics are needed.
+
+        ``progress`` is the completed fraction of training in [0, 1].
+        """
+        return None
 
     @abstractmethod
     def forward(
