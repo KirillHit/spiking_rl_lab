@@ -11,7 +11,7 @@ The current implementation includes REINFORCE, discrete and continuous policies,
 
 Requirements:
 
-- Python 3.12 or newer
+- Python 3.12
 - [uv](https://docs.astral.sh/uv/)
 
 Install the locked environment and launch an experiment:
