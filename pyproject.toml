@@ -41,6 +41,11 @@ url = "https://pypi.nvidia.com/"
 requires = ["uv_build>=0.11.0,<0.12.0"]
 build-backend = "uv_build"
 
+[dependency-groups]
+dev = [
+    "ruff>=0.17.2",
+]
+
 # -------------------
 # Formatting / lint
 # -------------------
