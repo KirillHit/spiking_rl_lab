@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from contextlib import suppress
 from dataclasses import dataclass
@@ -22,21 +23,43 @@ _APP_LAUNCHER: AppLauncher | None = None
 
 
 def _ensure_app_launcher(*, headless: bool, device: str) -> AppLauncher:
-    """Launch Isaac Sim once per process; reuse the existing app on later calls."""
+    """Launch Isaac Sim once per process; reuse the existing app on later calls.
+
+    Isaac Lab 3.x ``AppLauncher`` forces headless unless a Kit visualizer is
+    requested (same as omitting ``--headless`` but still needing ``--viz kit``
+    on the official CLI). When ``headless`` is false we request Kit explicitly
+    and clear ``HEADLESS`` for the launch so the windowed mode is honored.
+    """
     global _APP_LAUNCHER  # noqa: PLW0603
     if _APP_LAUNCHER is not None:
         return _APP_LAUNCHER
 
     from isaaclab.app import AppLauncher
 
+    launcher_args: dict = {"device": device}
+    if headless:
+        launcher_args["headless"] = True
+    else:
+        # Match official CLI: no --headless, with --viz kit.
+        launcher_args["visualizer"] = ["kit"]
+        launcher_args["visualizer_explicit"] = True
+
     # Kit reads sys.argv; Hydra overrides like experiment=... must not reach it.
     saved_argv = sys.argv.copy()
+    saved_headless_env = os.environ.get("HEADLESS")
     try:
         sys.argv = [saved_argv[0]]
+        if not headless:
+            os.environ["HEADLESS"] = "0"
         log.info("Launching Isaac Sim (headless=%s, device=%s)...", headless, device)
-        _APP_LAUNCHER = AppLauncher(headless=headless, device=device)
+        _APP_LAUNCHER = AppLauncher(launcher_args)
     finally:
         sys.argv = saved_argv
+        if not headless:
+            if saved_headless_env is None:
+                os.environ.pop("HEADLESS", None)
+            else:
+                os.environ["HEADLESS"] = saved_headless_env
 
     return _APP_LAUNCHER
 
