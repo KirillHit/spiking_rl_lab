@@ -219,8 +219,14 @@ class Trainer(SequentialTrainer):
             self.validator.reset_progress_reference()
 
     def _curriculum_call(self, method: str, *args: object) -> tuple[object, ...] | None:
-        """Call a curriculum capability on every underlying Gymnasium environment."""
+        """Call a curriculum capability on every underlying Gymnasium environment.
+
+        Isaac Lab wrappers do not expose ``call`` / ``has_wrapper_attr``; treat that
+        as no curriculum and continue training.
+        """
         if self.env.num_envs > 1:
+            if not hasattr(self.env, "call"):
+                return None
             supported = self.env.call("has_wrapper_attr", method)
             if not any(supported):
                 return None
@@ -229,6 +235,8 @@ class Trainer(SequentialTrainer):
                 raise RuntimeError(msg)
             return self.env.call(method, *args)
 
+        if not hasattr(self.env, "has_wrapper_attr"):
+            return None
         if not self.env.has_wrapper_attr(method):
             return None
         return (self.env.get_wrapper_attr(method)(*args),)
