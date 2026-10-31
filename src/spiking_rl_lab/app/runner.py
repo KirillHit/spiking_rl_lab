@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import logging
 from contextlib import contextmanager
 from copy import deepcopy
@@ -293,6 +293,6 @@ class Runner:
 
     def _generate_run_name(self, cfg: BaseConfig) -> str:
         """Generate a deterministic run name based on the experiment configuration."""
-        ts = datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d_%H-%M-%S")
+        ts = dt.datetime.now(tz=dt.UTC).strftime("%Y-%m-%d_%H-%M-%S")
         env_id = cfg.env.params.get("id", cfg.env.name)
         return f"{ts}_{env_id}_{cfg.agent.name}"

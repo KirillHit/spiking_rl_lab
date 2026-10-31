@@ -24,7 +24,10 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-ENV_BACKEND_MODULES = ["spiking_rl_lab.envs.gymnasium"]
+ENV_BACKEND_MODULES = [
+    "spiking_rl_lab.envs.gymnasium",
+    "spiking_rl_lab.envs.isaaclab",
+]
 ENV_BACKEND_REGISTRY: dict[str, type[BaseEnvBackend]] = {}
 ENV_BACKEND_SPEC = RegistrySpec[BaseEnvBackend](
     registry=ENV_BACKEND_REGISTRY,

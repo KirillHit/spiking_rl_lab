@@ -1,0 +1,126 @@
+# @package _global_
+# PPO with a Gaussian SNN policy and a feed-forward value network on Isaac-Cartpole.
+env:
+  name: isaaclab
+  params:
+    id: Isaac-Cartpole
+    n_envs: 32
+    device: cuda:0
+    render: false
+
+agent:
+  name: ppo
+  params:
+    policy_network:
+      nodes:
+        - name: population_code
+          params:
+            neurons_per_feature: 16
+            sigma: 0.3
+            learnable_mu: true
+            learnable_sigma: true
+        - name: linear
+          params:
+            out_features: 256
+            bias: false
+        - name: lif
+          params:
+            activity_scale: 0.025
+            decay: 0.6
+            normalize_input: true
+            v_th: 0.25
+            shared_decay: false
+            learnable_v_th: true
+        - name: linear
+          params:
+            out_features: 256
+            bias: false
+        - name: lif
+          params:
+            activity_scale: 0.025
+            decay: 0.6
+            normalize_input: true
+            v_th: 0.25
+            shared_decay: false
+            learnable_v_th: true
+        - name: linear
+          params:
+            out_features: 1
+            bias: false
+        - name: li
+          params:
+            decay: 0.8
+            normalize_input: true
+            shared_decay: false
+    value_network:
+      nodes:
+        - name: linear
+          params:
+            out_features: 256
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 256
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
+            out_features: 1
+    device: cuda:0
+    policy:
+      name: gaussian
+    rollouts: 256
+    sequence_length: 8
+    state_burn_in: 32
+    learning_epochs: 4
+    mini_batches: 8
+    ratio_clip: 0.2
+    value_clip: 0.0
+    value_loss_scale: 1.0
+    kl_threshold: 0.04
+    discount_factor: 0.99
+    gae_lambda: 0.95
+    policy_learning_rate: 1e-3
+    value_learning_rate: 1e-3
+    policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
+    policy_learning_rate_scheduler_kwargs:
+      kl_threshold: 0.03
+      kl_factor: 1.3
+      lr_factor: 1.2
+      min_lr: 1e-6
+      max_lr: 0.001
+    value_learning_rate_scheduler: null
+    observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
+    policy_grad_norm_clip: 0.5
+    value_grad_norm_clip: 0.5
+    entropy_loss_scale: 5e-4
+    time_limit_bootstrap: true
+    rewards_shaper: null
+    experiment:
+      checkpoint_interval: 100000
+      write_interval: 1000
+
+runner:
+  mode: train
+  seed: 42
+  deterministic: true
+  experiment_name: ppo_isaac_cartpole
+  output_dir: ${hydra:runtime.output_dir}
+  checkpoint_path: null
+  demo_fps: 50.0
+  dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
+  dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
+
+trainer:
+  params:
+    timesteps: 20000
+    headless: true
+    close_environment_at_exit: false
+    environment_info: log
+    validation:
+      episodes: 100
+      min_interval: 1000
+      max_interval: 2000
