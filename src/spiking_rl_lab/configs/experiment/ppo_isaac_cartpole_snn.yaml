@@ -6,7 +6,7 @@ env:
     id: Isaac-Cartpole
     n_envs: 32
     device: cuda:0
-    headless: true
+    render: false
 
 agent:
   name: ppo

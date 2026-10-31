@@ -75,7 +75,7 @@ class IsaacLabBackend(BaseEnvBackend):
         id: str
         n_envs: int = 64
         device: str = "cuda:0"
-        headless: bool = True
+        render: bool = False
 
         def __post_init__(self) -> None:
             """Validate environment backend parameters."""
@@ -88,7 +88,7 @@ class IsaacLabBackend(BaseEnvBackend):
         import gymnasium as gym
         from skrl.envs.wrappers.torch import wrap_env
 
-        _ensure_app_launcher(headless=self._cfg.headless, device=self._cfg.device)
+        _ensure_app_launcher(headless=not self._cfg.render, device=self._cfg.device)
 
         # Task gym ids register on import; must happen after AppLauncher.
         import isaaclab_tasks  # noqa: F401
