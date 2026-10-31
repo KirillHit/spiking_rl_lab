@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 
 
 NODE_MODULES = (
+    "spiking_rl_lab.networks.nodes.connections.event_linear",
+    "spiking_rl_lab.networks.nodes.spiking.sigma_delta.node",
     "spiking_rl_lab.networks.nodes.standard.linear",
     "spiking_rl_lab.networks.nodes.spiking.temporal_linear",
     "spiking_rl_lab.networks.nodes.standard.normalization",

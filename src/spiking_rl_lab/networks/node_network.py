@@ -51,6 +51,10 @@ class NodeNetwork(nn.Module, ConfiguredBase):
             self._net.append(node)
             self._output_shape = node.output_shape
 
+        if self._output_shape.event_stream:
+            msg = "Event streams require a tensor readout at the network boundary"
+            raise TypeError(msg)
+
         self._initialize_parameters()
 
     @property

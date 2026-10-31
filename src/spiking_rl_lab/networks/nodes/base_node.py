@@ -13,6 +13,7 @@ from torch import nn
 from spiking_rl_lab.core.factory import ConfiguredBase
 
 if TYPE_CHECKING:
+    from spiking_rl_lab.networks.events import EventPacket
     from spiking_rl_lab.networks.nodes.statistics import NodeStatisticsAccumulator
     from spiking_rl_lab.networks.shape import TensorShape
     from spiking_rl_lab.networks.state import ListState
@@ -61,7 +62,7 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
     def output_shape(self) -> TensorShape:
         """Return output shape."""
 
-    def initial_state(self, inputs: torch.Tensor) -> ListState | None:
+    def initial_state(self, inputs: torch.Tensor | EventPacket) -> ListState | None:
         """Create the initial state for a batch of ``inputs``.
 
         Stateless nodes keep the default ``None`` state. Nodes that retain
@@ -100,7 +101,7 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
     @abstractmethod
     def forward(
         self,
-        inputs: torch.Tensor,
+        inputs: torch.Tensor | EventPacket,
         state: ListState | None = None,
-    ) -> tuple[torch.Tensor, ListState]:
+    ) -> tuple[torch.Tensor | EventPacket, ListState | None]:
         """Compute a deterministic next output and explicit state."""

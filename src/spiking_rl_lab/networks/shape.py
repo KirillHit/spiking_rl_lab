@@ -10,8 +10,12 @@ import numpy as np
 from spiking_rl_lab.core.validation import require_positive
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True, slots=True)
 class TensorShape(ABC):
     """Base interface for tensor shapes without the batch dimension."""
+
+    event_stream: bool = False
+    """Whether values are transmitted as continuous-time event arrays."""
 
     @property
     @abstractmethod
@@ -24,19 +28,33 @@ class TensorShape(ABC):
         """Return tensor dimensions keyed by semantic field name."""
 
     @classmethod
-    def dense(cls, features: int) -> DenseTensorShape:
+    def dense(cls, features: int, *, event_stream: bool = False) -> DenseTensorShape:
         """Build a flat dense-network shape ``[batch, features]``."""
-        return DenseTensorShape(features=features)
+        return DenseTensorShape(features=features, event_stream=event_stream)
 
     @classmethod
-    def sequence(cls, channels: int, length: int) -> SequenceTensorShape:
+    def sequence(
+        cls, channels: int, length: int, *, event_stream: bool = False
+    ) -> SequenceTensorShape:
         """Build a channel-first 1D shape ``[batch, channels, length]``."""
-        return SequenceTensorShape(channels=channels, length=length)
+        return SequenceTensorShape(channels=channels, length=length, event_stream=event_stream)
 
     @classmethod
-    def image(cls, channels: int, height: int, width: int) -> ImageTensorShape:
+    def image(
+        cls,
+        channels: int,
+        height: int,
+        width: int,
+        *,
+        event_stream: bool = False,
+    ) -> ImageTensorShape:
         """Build a channel-first image shape ``[batch, channels, height, width]``."""
-        return ImageTensorShape(channels=channels, height=height, width=width)
+        return ImageTensorShape(
+            channels=channels,
+            height=height,
+            width=width,
+            event_stream=event_stream,
+        )
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True, slots=True)
@@ -112,9 +130,14 @@ def require_shape[ShapeT: TensorShape](
     name: str,
     shape: TensorShape,
     shape_type: type[ShapeT] | tuple[type[ShapeT], ...],
+    *,
+    event_stream: bool = False,
 ) -> ShapeT:
     """Require a tensor shape of the expected type."""
     if isinstance(shape, shape_type):
+        if shape.event_stream != event_stream:
+            msg = f"{name} requires event_stream={event_stream}, got {shape.event_stream}"
+            raise TypeError(msg)
         return shape
 
     if isinstance(shape_type, tuple):

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
     import torch
 
+    from spiking_rl_lab.networks.events import EventPacket
     from spiking_rl_lab.networks.node_network import NodeNetwork
     from spiking_rl_lab.networks.state import ListState
 
@@ -28,7 +29,7 @@ class NodeStatistics:
 class NodeStatisticsAccumulator(Protocol):
     """Collect outputs for one sequence without modifying the node's state."""
 
-    def update(self, outputs: torch.Tensor) -> None:
+    def update(self, outputs: torch.Tensor | EventPacket) -> None:
         """Accumulate a batch of outputs while preserving its gradient graph."""
         ...
 
@@ -60,7 +61,7 @@ def collect_node_statistics(
             def collect(
                 _node: BaseNode,
                 _inputs: tuple[object, ...],
-                output: tuple[torch.Tensor, ListState | None],
+                output: tuple[torch.Tensor | EventPacket, ListState | None],
                 *,
                 accumulator: NodeStatisticsAccumulator = accumulator,
             ) -> None:
