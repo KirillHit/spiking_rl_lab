@@ -25,6 +25,7 @@ NODE_MODULES = (
     "spiking_rl_lab.networks.nodes.standard.linear",
     "spiking_rl_lab.networks.nodes.spiking.temporal_linear",
     "spiking_rl_lab.networks.nodes.spiking.delay_linear",
+    "spiking_rl_lab.networks.nodes.spiking.sigma_delta",
     "spiking_rl_lab.networks.nodes.standard.normalization",
     "spiking_rl_lab.networks.nodes.standard.convolutions",
     "spiking_rl_lab.networks.nodes.composition.skip",
