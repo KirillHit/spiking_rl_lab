@@ -431,7 +431,9 @@ class A2C(BaseAgent):
             torch.nn.utils.clip_grad_norm_(self._value_parameters, self.cfg.value_grad_norm_clip)
 
         self.policy_optimizer.step()
+        self.policy_network.proximal_step(self.policy_optimizer)
         self.value_optimizer.step()
+        self.value_network.proximal_step(self.value_optimizer)
 
         apply_collected_batch_norm_statistics(self.policy_network, self.value_network)
 

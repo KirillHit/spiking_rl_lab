@@ -88,6 +88,9 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
         initialization scheme.
         """
 
+    def proximal_step(self, optimizer: torch.optim.Optimizer) -> None:
+        """Apply local parameter constraints after the supplied optimizer step."""
+
     def update_training_progress(self, progress: float) -> None:
         """Apply a training schedule outside forward without changing sequence state."""
 

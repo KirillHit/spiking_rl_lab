@@ -673,6 +673,7 @@ class PPO(BaseAgent):
         if self.cfg.policy_grad_norm_clip:
             torch.nn.utils.clip_grad_norm_(self._policy_parameters, self.cfg.policy_grad_norm_clip)
         self.policy_optimizer.step()
+        self.policy_network.proximal_step(self.policy_optimizer)
 
     def _optimize_value(self, loss: torch.Tensor) -> None:
         """Apply one clipped critic gradient step."""
@@ -681,6 +682,7 @@ class PPO(BaseAgent):
         if self.cfg.value_grad_norm_clip:
             torch.nn.utils.clip_grad_norm_(self._value_parameters, self.cfg.value_grad_norm_clip)
         self.value_optimizer.step()
+        self.value_network.proximal_step(self.value_optimizer)
 
     def update(self, *, timestep: int, timesteps: int) -> None:
         """Update the policy and value networks from the collected rollout."""

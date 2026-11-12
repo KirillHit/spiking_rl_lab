@@ -73,6 +73,12 @@ class NodeNetwork(nn.Module, ConfiguredBase):
             if isinstance(node, BaseNode):
                 node.update_training_progress(progress)
 
+    def proximal_step(self, optimizer: torch.optim.Optimizer) -> None:
+        """Update local constraints once per node, including nested branches."""
+        for node in self.modules():
+            if isinstance(node, BaseNode):
+                node.proximal_step(optimizer)
+
     def initial_state(self, inputs: torch.Tensor) -> ListState:
         """Create one initial state per node for a batch of inputs."""
         state = []

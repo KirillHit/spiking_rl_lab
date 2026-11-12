@@ -267,6 +267,7 @@ class Reinforce(BaseAgent):
             torch.nn.utils.clip_grad_norm_(self._parameters, self.cfg.grad_norm_clip)
 
         self.optimizer.step()
+        self.policy_network.proximal_step(self.optimizer)
         if self.scheduler is not None:
             self.scheduler.step()
 

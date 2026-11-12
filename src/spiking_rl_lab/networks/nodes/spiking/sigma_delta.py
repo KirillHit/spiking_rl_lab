@@ -10,7 +10,7 @@ import torch
 from torch import nn
 from torch.nn import functional
 
-from spiking_rl_lab.core.validation import require_positive
+from spiking_rl_lab.core.validation import require_minimum, require_positive
 from spiking_rl_lab.networks.nodes.base_node import BaseNode
 from spiking_rl_lab.networks.nodes.builder import register_node
 from spiking_rl_lab.networks.nodes.statistics import NodeStatistics
@@ -74,11 +74,13 @@ class SigmaDeltaNode(BaseNode):
 
         threshold: float = 0.01
         surrogate_width: float = 0.03
+        threshold_proximal: float = 0.0
 
         def validate(self) -> None:
-            """Require positive scales."""
+            """Require positive scales and nonnegative proximal strength."""
             require_positive("threshold", self.threshold)
             require_positive("surrogate_width", self.surrogate_width)
+            require_minimum("threshold_proximal", self.threshold_proximal, minimum=0)
 
     def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
         """Allocate one unconstrained threshold parameter per input coordinate."""
@@ -100,6 +102,21 @@ class SigmaDeltaNode(BaseNode):
     def initialize_parameters(self) -> None:
         """Initialize softplus parameters to the configured threshold."""
         self.raw_threshold.fill_(self._cfg.threshold + math.log(-math.expm1(-self._cfg.threshold)))
+
+    @torch.no_grad()
+    def proximal_step(self, optimizer: torch.optim.Optimizer) -> None:
+        """Apply the Euclidean prox of -strength * log(threshold) in threshold space."""
+        if not self._cfg.threshold_proximal or self.raw_threshold.grad is None:
+            return
+        for group in optimizer.param_groups:
+            if any(parameter is self.raw_threshold for parameter in group["params"]):
+                step = group["lr"] * self._cfg.threshold_proximal
+                if step == 0:
+                    return
+                threshold = self.threshold
+                threshold = (threshold + torch.sqrt(threshold.square() + 4 * step)) / 2
+                self.raw_threshold.copy_(threshold + torch.log(-torch.expm1(-threshold)))
+                return
 
     def initial_state(self, inputs: torch.Tensor) -> SigmaDeltaState:
         """Start each batch row with a zero represented value."""
@@ -123,11 +140,12 @@ class SigmaDeltaNode(BaseNode):
             state = self.initial_state(inputs)
         value = inputs.relu()
         residual = value - state.value
-        hard = state.value + torch.where(residual.abs() > self.threshold, residual, 0.0)
+        threshold = self.threshold
+        hard = state.value + torch.where(residual.abs() > threshold, residual, 0.0)
         if torch.is_grad_enabled():
             scale = self._cfg.surrogate_width * math.sqrt(2)
-            probability = 0.5 * (1 + torch.erf((residual - self.threshold) / scale))
-            probability = probability + 0.5 * (1 + torch.erf((-residual - self.threshold) / scale))
+            probability = 0.5 * (1 + torch.erf((residual - threshold) / scale))
+            probability = probability + 0.5 * (1 + torch.erf((-residual - threshold) / scale))
             smooth = state.value + residual * probability
             hard = hard.detach() + (smooth - smooth.detach())
         return hard, SigmaDeltaState(hard)
