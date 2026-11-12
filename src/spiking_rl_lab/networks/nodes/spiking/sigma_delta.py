@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import torch
 from torch import nn
@@ -13,13 +13,50 @@ from torch.nn import functional
 from spiking_rl_lab.core.validation import require_positive
 from spiking_rl_lab.networks.nodes.base_node import BaseNode
 from spiking_rl_lab.networks.nodes.builder import register_node
+from spiking_rl_lab.networks.nodes.statistics import NodeStatistics
 from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape, require_shape
+
+if TYPE_CHECKING:
+    from spiking_rl_lab.networks.nodes.statistics import NodeStatisticsAccumulator
 
 
 class SigmaDeltaState(NamedTuple):
     """Represented output accumulated from zero."""
 
     value: torch.Tensor  # [batch, features], sum of corrections already transmitted.
+
+
+@dataclasses.dataclass
+class _TransmissionStatistics:
+    """Count actual changes of the represented output without retaining its graph."""
+
+    event_total: torch.Tensor | None = None
+    count: int = 0
+
+    def update(
+        self,
+        inputs: torch.Tensor,
+        state: SigmaDeltaState | None,
+        outputs: torch.Tensor,
+        next_state: SigmaDeltaState,
+    ) -> None:
+        """Count signed corrections, including the first step from zero."""
+        previous = 0 if state is None else state.value.detach()
+        events = (outputs.detach() != previous).to(outputs.dtype).sum()
+        self.event_total = events if self.event_total is None else self.event_total + events
+        self.count += outputs.numel()
+
+    def result(self) -> NodeStatistics | None:
+        """Report the fraction and total number of transmitted corrections."""
+        if not self.count:
+            return None
+        return NodeStatistics(
+            loss=None,
+            metrics={
+                "activity_mean": self.event_total / self.count,
+                "event_count": self.event_total,
+            },
+        )
 
 
 @register_node("sigma_delta")
@@ -71,6 +108,12 @@ class SigmaDeltaNode(BaseNode):
     def reset_state(self, state: SigmaDeltaState, dones: torch.Tensor) -> SigmaDeltaState:
         """Reset completed rows without modifying the supplied state."""
         return SigmaDeltaState(state.value.masked_fill(dones.reshape(-1, 1), 0))
+
+    def create_statistics(
+        self, *, progress: float, collect_metrics: bool = False
+    ) -> NodeStatisticsAccumulator | None:
+        """Collect transmissions only when metrics are requested."""
+        return _TransmissionStatistics() if collect_metrics else None
 
     def forward(
         self, inputs: torch.Tensor, state: SigmaDeltaState | None = None

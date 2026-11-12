@@ -49,7 +49,9 @@ class _ActivityStatistics:
     spike_total: torch.Tensor | None = None
     count: int = 0
 
-    def update(self, outputs: torch.Tensor) -> None:
+    def update(
+        self, inputs: torch.Tensor, state: object, outputs: torch.Tensor, next_state: object
+    ) -> None:
         """Add spikes per neuron, preserving gradients only for the penalty."""
         values = outputs if self.activity_scale is not None else outputs.detach()
         spikes = values.sum(dim=0)
