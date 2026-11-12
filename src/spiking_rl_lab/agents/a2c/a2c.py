@@ -123,6 +123,8 @@ class A2C(BaseAgent):
             msg = "Failed to create A2C components"
             raise AgentCreationError(msg) from exc
 
+        self.networks.extend((self.policy_network, self.value_network))
+
         self._policy_parameters = tuple(
             parameter
             for module in (self.policy_network, self.policy)
@@ -306,9 +308,6 @@ class A2C(BaseAgent):
         self._processed_observation = None
         self._current_value = None
 
-    def pre_interaction(self, *, timestep: int, timesteps: int) -> None:
-        """Prepare the agent before an environment interaction."""
-
     def reset_state(self, dones: torch.Tensor) -> None:
         """Reset recurrent state for completed environments."""
         self._policy_state = self.policy_network.reset_state(self._policy_state, dones)
@@ -319,6 +318,7 @@ class A2C(BaseAgent):
         if self.training and self.memory.filled:
             started_at = time.perf_counter()
             self.update(timestep=timestep, timesteps=timesteps)
+            self.update_network_progress()
             self.track_data(
                 "Stats / Algorithm update time (ms)",
                 (time.perf_counter() - started_at) * 1_000,
@@ -402,8 +402,6 @@ class A2C(BaseAgent):
         """Update the policy and value networks from the collected rollout."""
         if not self.memory.filled:
             return
-
-        self._training_progress = (timestep + 1) / timesteps
 
         next_inputs = torch.flatten(
             self._observation_preprocessor(self._next_observation, train=False), start_dim=1

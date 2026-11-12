@@ -54,6 +54,8 @@ class Reinforce(BaseAgent):
             msg = "Failed to create REINFORCE policy components"
             raise AgentCreationError(msg) from exc
 
+        self.networks.append(self.policy_network)
+
         self._parameters = tuple(
             parameter
             for module in (self.policy_network, self.policy)
@@ -187,9 +189,6 @@ class Reinforce(BaseAgent):
         )
         self._processed_observation = None
 
-    def pre_interaction(self, *, timestep: int, timesteps: int) -> None:
-        """Run the hook before environment interaction."""
-
     def reset_state(self, dones: torch.Tensor) -> None:
         """Reset recurrent state for completed environments."""
         self._hidden_states = self.policy_network.reset_state(self._hidden_states, dones)
@@ -199,6 +198,7 @@ class Reinforce(BaseAgent):
         if self.training and self.memory.filled:
             started_at = time.perf_counter()
             self.update(timestep=timestep, timesteps=timesteps)
+            self.update_network_progress()
             self.track_data(
                 "Stats / Algorithm update time (ms)",
                 (time.perf_counter() - started_at) * 1_000,

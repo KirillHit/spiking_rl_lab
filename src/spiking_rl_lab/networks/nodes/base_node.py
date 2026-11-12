@@ -88,6 +88,9 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
         initialization scheme.
         """
 
+    def update_training_progress(self, progress: float) -> None:
+        """Apply a training schedule outside forward without changing sequence state."""
+
     def create_statistics(
         self, *, progress: float, collect_metrics: bool = False
     ) -> NodeStatisticsAccumulator | None:

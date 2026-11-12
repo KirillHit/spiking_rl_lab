@@ -10,6 +10,7 @@ from torch import nn
 
 from spiking_rl_lab.core.factory import ConfiguredBase
 from spiking_rl_lab.core.validation import require_minimum
+from spiking_rl_lab.networks.nodes.base_node import BaseNode
 from spiking_rl_lab.networks.nodes.builder import NodeConfig, build_node
 
 if TYPE_CHECKING:
@@ -62,6 +63,15 @@ class NodeNetwork(nn.Module, ConfiguredBase):
         """Initialize parameters through each node's own hook."""
         for node in self._net:
             node.initialize_parameters()
+
+    def update_training_progress(self, progress: float) -> None:
+        """Advance scheduled nodes, including nested composition children."""
+        if not 0 <= progress <= 1:
+            msg = "training progress must be in [0, 1]"
+            raise ValueError(msg)
+        for node in self.modules():
+            if isinstance(node, BaseNode):
+                node.update_training_progress(progress)
 
     def initial_state(self, inputs: torch.Tensor) -> ListState:
         """Create one initial state per node for a batch of inputs."""

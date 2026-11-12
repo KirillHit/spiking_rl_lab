@@ -15,10 +15,11 @@ dependencies = [
     "flatten-dict>=0.5.0",
     "gymnasium[classic-control,mujoco]>=1.4.0",
     "hydra-core>=1.3.3",
-    "ir-sim>=2.11.0",
+    "ir-sim>=2.12.1",
     "isaaclab[isaacsim]==3.0.0rc1",
     "mlflow>=3.14.0",
     "mujoco==3.11.0",
+    "mujoco-usd-converter",
     "norse>=1.1.0",
     "numpy==2.3.1",
     "onnxruntime-gpu==1.26.0",
@@ -39,8 +40,16 @@ spiking-rl-lab = "spiking_rl_lab.run:main"
 # Use the GPU runtime required by the x86_64 Isaac Sim wheel.
 exclude-dependencies = ["onnxruntime"]
 
+[tool.uv.sources]
+mujoco-usd-converter = { index = "pypi" }
+
 [[tool.uv.index]]
 url = "https://pypi.nvidia.com/"
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
 
 [build-system]
 requires = ["uv_build>=0.11.0,<0.14.0"]
