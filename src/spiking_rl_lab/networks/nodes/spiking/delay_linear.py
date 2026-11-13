@@ -65,6 +65,7 @@ class DelayLinearNode(BaseNode):
         bias: bool = True
         mode: Literal["soft", "ste", "fixed"] = "ste"
         temperature: float = 1.0
+        weight_proximal: float = 0.0
         schedule: list[DelayStage] = dataclasses.field(default_factory=list)
 
         def __post_init__(self) -> None:
@@ -78,6 +79,7 @@ class DelayLinearNode(BaseNode):
             """Require valid dimensions, a supported mode and finite temperature."""
             require_minimum("out_features", self.out_features, minimum=1)
             require_minimum("max_delay", self.max_delay, minimum=0)
+            require_minimum("weight_proximal", self.weight_proximal, minimum=0)
             _validate_operator(self.mode, self.temperature)
             starts = [stage.start for stage in self.schedule]
             if starts and (starts[0] != 0 or any(a >= b for a, b in pairwise(starts))):
@@ -150,6 +152,27 @@ class DelayLinearNode(BaseNode):
         self.delay_logits.copy_(-math.log(2) * lag[None, :, None])
         self.delay_logits.add_(0.01 * torch.randn_like(self.delay_logits))
         self.fixed_delays.copy_(self.delay_logits.argmax(dim=1))
+
+    @torch.no_grad()
+    def proximal_step(self, optimizer: torch.optim.Optimizer) -> None:
+        """Soft-threshold spatial weights in Adam's diagonal metric, allowing regrowth."""
+        if not self._cfg.weight_proximal or self.weight.grad is None:
+            return
+        for group in optimizer.param_groups:
+            if not any(parameter is self.weight for parameter in group["params"]):
+                continue
+            if not isinstance(optimizer, (torch.optim.Adam, torch.optim.AdamW)):
+                msg = "weight_proximal requires Adam or AdamW"
+                raise TypeError(msg)
+            state = optimizer.state.get(self.weight, {})
+            if not state or group["lr"] == 0:
+                return
+            second_moment = state["max_exp_avg_sq"] if group["amsgrad"] else state["exp_avg_sq"]
+            scale = second_moment.mean().sqrt()
+            metric = second_moment.sqrt() + group["eps"]
+            threshold = group["lr"] * self._cfg.weight_proximal * scale / metric
+            self.weight.copy_(self.weight.sign() * (self.weight.abs() - threshold).clamp_min(0))
+            return
 
     def initial_state(self, inputs: torch.Tensor) -> DelayState | None:
         """Return unused history, or no state for an ordinary linear operator."""

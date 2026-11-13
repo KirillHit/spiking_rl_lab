@@ -62,7 +62,7 @@ class Reinforce(BaseAgent):
             for parameter in module.parameters()
             if parameter.requires_grad
         )
-        self.optimizer = torch.optim.Adamax(self._parameters, lr=cfg.learning_rate)
+        self.optimizer = torch.optim.Adam(self._parameters, lr=cfg.learning_rate)
 
         self.checkpoint_modules.update(
             policy_network=self.policy_network, policy=self.policy, optimizer=self.optimizer
