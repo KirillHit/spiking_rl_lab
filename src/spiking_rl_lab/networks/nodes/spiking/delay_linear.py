@@ -5,13 +5,13 @@ from __future__ import annotations
 import dataclasses
 import math
 from itertools import pairwise
-from typing import Literal, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import torch
 from torch import nn
 from torch.nn import functional
 
-from spiking_rl_lab.core.validation import require_minimum, require_positive
+from spiking_rl_lab.core.validation import require_minimum, require_positive, require_range
 from spiking_rl_lab.networks.nodes.base_node import BaseNode
 from spiking_rl_lab.networks.nodes.builder import register_node
 from spiking_rl_lab.networks.shape import DenseTensorShape, TensorShape, require_shape
@@ -65,7 +65,10 @@ class DelayLinearNode(BaseNode):
         bias: bool = True
         mode: Literal["soft", "ste", "fixed"] = "ste"
         temperature: float = 1.0
+        delay_lr_multiplier: float = 1.0
         weight_proximal: float = 0.0
+        proximal_start: float = 0.0
+        proximal_end: float = 0.0
         schedule: list[DelayStage] = dataclasses.field(default_factory=list)
 
         def __post_init__(self) -> None:
@@ -79,7 +82,10 @@ class DelayLinearNode(BaseNode):
             """Require valid dimensions, a supported mode and finite temperature."""
             require_minimum("out_features", self.out_features, minimum=1)
             require_minimum("max_delay", self.max_delay, minimum=0)
+            require_positive("delay_lr_multiplier", self.delay_lr_multiplier)
             require_minimum("weight_proximal", self.weight_proximal, minimum=0)
+            require_range("proximal_start", self.proximal_start, minimum=0, maximum=1)
+            require_range("proximal_end", self.proximal_end, minimum=self.proximal_start, maximum=1)
             _validate_operator(self.mode, self.temperature)
             starts = [stage.start for stage in self.schedule]
             if starts and (starts[0] != 0 or any(a >= b for a, b in pairwise(starts))):
@@ -99,6 +105,7 @@ class DelayLinearNode(BaseNode):
             torch.empty(cfg.out_features, cfg.max_delay + 1, shape.features)
         )
         self.register_buffer("fixed_delays", torch.zeros_like(self.weight, dtype=torch.long))
+        self._weight_proximal = cfg.weight_proximal if cfg.proximal_end == 0 else 0.0
         self._output_shape = TensorShape.dense(cfg.out_features)
 
     @property
@@ -117,9 +124,14 @@ class DelayLinearNode(BaseNode):
 
     def update_training_progress(self, progress: float) -> None:
         """Apply a configured stage for the supplied training progress."""
-        if not 0 <= progress <= 1:
-            msg = "training progress must be in [0, 1]"
-            raise ValueError(msg)
+        require_range("training progress", progress, minimum=0, maximum=1)
+        start, end = self._cfg.proximal_start, self._cfg.proximal_end
+        factor = (
+            float(progress >= start)
+            if start == end
+            else min(max((progress - start) / (end - start), 0), 1)
+        )
+        self._weight_proximal = self._cfg.weight_proximal * factor
         stages = self._cfg.schedule
         if not stages:
             return
@@ -156,7 +168,7 @@ class DelayLinearNode(BaseNode):
     @torch.no_grad()
     def proximal_step(self, optimizer: torch.optim.Optimizer) -> None:
         """Soft-threshold spatial weights in Adam's diagonal metric, allowing regrowth."""
-        if not self._cfg.weight_proximal or self.weight.grad is None:
+        if not self._weight_proximal or self.weight.grad is None:
             return
         for group in optimizer.param_groups:
             if not any(parameter is self.weight for parameter in group["params"]):
@@ -170,9 +182,20 @@ class DelayLinearNode(BaseNode):
             second_moment = state["max_exp_avg_sq"] if group["amsgrad"] else state["exp_avg_sq"]
             scale = second_moment.mean().sqrt()
             metric = second_moment.sqrt() + group["eps"]
-            threshold = group["lr"] * self._cfg.weight_proximal * scale / metric
+            threshold = group["lr"] * self._weight_proximal * scale / metric
             self.weight.copy_(self.weight.sign() * (self.weight.abs() - threshold).clamp_min(0))
             return
+
+    def parameter_groups(self, learning_rate: float) -> list[dict[str, Any]]:
+        """Apply the configured relative learning rate to delay logits."""
+        if not self.delay_logits.requires_grad or self._cfg.delay_lr_multiplier == 1:
+            return []
+        return [
+            {
+                "params": [self.delay_logits],
+                "lr": learning_rate * self._cfg.delay_lr_multiplier,
+            }
+        ]
 
     def initial_state(self, inputs: torch.Tensor) -> DelayState | None:
         """Return unused history, or no state for an ordinary linear operator."""

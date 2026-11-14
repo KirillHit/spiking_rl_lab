@@ -11,12 +11,12 @@ import torch
 from gymnasium.spaces import Discrete
 from gymnasium.spaces.utils import flatdim
 from skrl.memories.torch import RandomMemory
-from skrl.resources.schedulers.torch import KLAdaptiveLR
 
 from spiking_rl_lab.agents.a2c.a2c import _as_sequences, compute_gae
 from spiking_rl_lab.agents.base_agent import BaseAgent
 from spiking_rl_lab.agents.builder import register_agent
 from spiking_rl_lab.agents.ppo.ppo_cfg import PPOConfig
+from spiking_rl_lab.agents.ppo.schedulers import KLAdaptiveLR
 from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.validation import require_shape_fields
 from spiking_rl_lab.envs.observations import bootstrap_observations
@@ -143,19 +143,8 @@ class PPO(BaseAgent):
 
         self.networks.extend((self.policy_network, self.value_network))
 
-        self._policy_parameters = tuple(
-            parameter
-            for module in (self.policy_network, self.policy)
-            for parameter in module.parameters()
-            if parameter.requires_grad
-        )
-        self._value_parameters = tuple(
-            parameter for parameter in self.value_network.parameters() if parameter.requires_grad
-        )
-        self.policy_optimizer = torch.optim.Adam(
-            self._policy_parameters, lr=cfg.policy_learning_rate
-        )
-        self.value_optimizer = torch.optim.Adam(self._value_parameters, lr=cfg.value_learning_rate)
+        self._build_optimizers(cfg)
+
         self.checkpoint_modules.update(
             policy_network=self.policy_network,
             value_network=self.value_network,
@@ -198,6 +187,26 @@ class PPO(BaseAgent):
         self._current_log_prob: torch.Tensor | None = None
         self._distribution_statistics: dict[str, torch.Tensor] = {}
         self._distribution_statistics_steps = 0
+
+    def _build_optimizers(self, cfg: PPOConfig) -> None:
+        """Collect trainable parameters and build policy and value optimizers."""
+        self._policy_parameters = tuple(
+            parameter
+            for module in (self.policy_network, self.policy)
+            for parameter in module.parameters()
+            if parameter.requires_grad
+        )
+        self._value_parameters = tuple(
+            parameter for parameter in self.value_network.parameters() if parameter.requires_grad
+        )
+        policy_groups = self.policy_network.parameter_groups(cfg.policy_learning_rate)
+        policy_groups[0]["params"].extend(
+            parameter for parameter in self.policy.parameters() if parameter.requires_grad
+        )
+        self.policy_optimizer = torch.optim.Adam(policy_groups, lr=cfg.policy_learning_rate)
+        self.value_optimizer = torch.optim.Adam(
+            self.value_network.parameter_groups(cfg.value_learning_rate), lr=cfg.value_learning_rate
+        )
 
     def build_memory(self, *, env: Wrapper) -> Memory:
         """Build storage for one rollout."""

@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
@@ -90,6 +90,10 @@ class BaseNode(nn.Module, ConfiguredBase, ABC):
 
     def proximal_step(self, optimizer: torch.optim.Optimizer) -> None:
         """Apply local parameter constraints after the supplied optimizer step."""
+
+    def parameter_groups(self, learning_rate: float) -> list[dict[str, Any]]:
+        """Return locally owned parameters requiring a nondefault learning rate."""
+        return []
 
     def update_training_progress(self, progress: float) -> None:
         """Apply a training schedule outside forward without changing sequence state."""

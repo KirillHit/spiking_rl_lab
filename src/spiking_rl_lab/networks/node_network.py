@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
 from torch import nn
@@ -78,6 +78,21 @@ class NodeNetwork(nn.Module, ConfiguredBase):
         for node in self.modules():
             if isinstance(node, BaseNode):
                 node.proximal_step(optimizer)
+
+    def parameter_groups(self, learning_rate: float) -> list[dict[str, Any]]:
+        """Collect local learning rates, keeping all remaining parameters in the base group."""
+        groups: dict[float, list[nn.Parameter]] = {learning_rate: []}
+        for node in self.modules():
+            if isinstance(node, BaseNode):
+                for group in node.parameter_groups(learning_rate):
+                    groups.setdefault(group["lr"], []).extend(group["params"])
+        assigned = {id(parameter) for parameters in groups.values() for parameter in parameters}
+        groups[learning_rate].extend(
+            parameter
+            for parameter in self.parameters()
+            if parameter.requires_grad and id(parameter) not in assigned
+        )
+        return [{"params": parameters, "lr": rate} for rate, parameters in groups.items()]
 
     def initial_state(self, inputs: torch.Tensor) -> ListState:
         """Create one initial state per node for a batch of inputs."""
