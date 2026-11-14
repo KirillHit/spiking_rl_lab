@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.12.*"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -1629,7 +1629,7 @@ wheels = [
 
 [[package]]
 name = "ir-sim"
-version = "2.12.0"
+version = "2.12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "imageio" },
@@ -1640,9 +1640,9 @@ dependencies = [
     { name = "scipy" },
     { name = "shapely" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/43/d3/3182d7f65a0d5508ee41a8c68d6c993b374e73a48a1aee29fdb2c817c938/ir_sim-2.12.0.tar.gz", hash = "sha256:7822f0e4c8eda2f7210b533eb6fafe28504e5a4d945044f69be097ac1178b343", size = 917091, upload-time = "2026-10-04T11:10:48.395Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/60/37/7580ea7e0dcf0f435060f1475b72517358225362001102552c888f79116d/ir_sim-2.12.1.tar.gz", hash = "sha256:64d3351196c713e584699ab7431b35d861852d5da16fd471611d60dd6fd6de1b", size = 956746, upload-time = "2026-11-11T17:46:37.875Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/95/8b/c8c828d17ca43e8a0678355b10fba72d8334f0e212fa75815ad5b367fbaf/ir_sim-2.12.0-py3-none-any.whl", hash = "sha256:09ea250ec05fa5b92db43245361aec7eca94dbef825c77329da92d3a8e1cb4cd", size = 816932, upload-time = "2026-10-04T11:10:46.978Z" },
+    { url = "https://files.pythonhosted.org/packages/a6/0c/368eb22875cb170d95868f60a1d06e30eedf0cd28e390772d6101ece4161/ir_sim-2.12.1-py3-none-any.whl", hash = "sha256:30783d9589f5f1acd6ce46984c1cb8ab2589c8a4895b646cae099089cb343297", size = 836499, upload-time = "2026-11-11T17:46:36.291Z" },
 ]
 
 [[package]]
@@ -4362,6 +4362,7 @@ dependencies = [
     { name = "isaaclab", extra = ["isaacsim"] },
     { name = "mlflow" },
     { name = "mujoco" },
+    { name = "mujoco-usd-converter" },
     { name = "norse" },
     { name = "numpy" },
     { name = "onnxruntime-gpu" },
@@ -4384,10 +4385,11 @@ requires-dist = [
     { name = "flatten-dict", specifier = ">=0.5.0" },
     { name = "gymnasium", extras = ["classic-control", "mujoco"], specifier = ">=1.4.0" },
     { name = "hydra-core", specifier = ">=1.3.3" },
-    { name = "ir-sim", specifier = ">=2.11.0" },
+    { name = "ir-sim", specifier = ">=2.12.1" },
     { name = "isaaclab", extras = ["isaacsim"], specifier = "==3.0.0rc1" },
     { name = "mlflow", specifier = ">=3.14.0" },
     { name = "mujoco", specifier = "==3.11.0" },
+    { name = "mujoco-usd-converter", index = "https://pypi.org/simple" },
     { name = "norse", specifier = ">=1.1.0" },
     { name = "numpy", specifier = "==2.3.1" },
     { name = "onnxruntime-gpu", specifier = "==1.26.0" },

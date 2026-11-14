@@ -123,6 +123,8 @@ class A2C(BaseAgent):
             msg = "Failed to create A2C components"
             raise AgentCreationError(msg) from exc
 
+        self.networks.extend((self.policy_network, self.value_network))
+
         self._policy_parameters = tuple(
             parameter
             for module in (self.policy_network, self.policy)
@@ -132,12 +134,10 @@ class A2C(BaseAgent):
         self._value_parameters = tuple(
             parameter for parameter in self.value_network.parameters() if parameter.requires_grad
         )
-        self.policy_optimizer = torch.optim.Adamax(
+        self.policy_optimizer = torch.optim.Adam(
             self._policy_parameters, lr=cfg.policy_learning_rate
         )
-        self.value_optimizer = torch.optim.Adamax(
-            self._value_parameters, lr=cfg.value_learning_rate
-        )
+        self.value_optimizer = torch.optim.Adam(self._value_parameters, lr=cfg.value_learning_rate)
         self.checkpoint_modules.update(
             policy_network=self.policy_network,
             value_network=self.value_network,
@@ -306,9 +306,6 @@ class A2C(BaseAgent):
         self._processed_observation = None
         self._current_value = None
 
-    def pre_interaction(self, *, timestep: int, timesteps: int) -> None:
-        """Prepare the agent before an environment interaction."""
-
     def reset_state(self, dones: torch.Tensor) -> None:
         """Reset recurrent state for completed environments."""
         self._policy_state = self.policy_network.reset_state(self._policy_state, dones)
@@ -319,6 +316,7 @@ class A2C(BaseAgent):
         if self.training and self.memory.filled:
             started_at = time.perf_counter()
             self.update(timestep=timestep, timesteps=timesteps)
+            self.update_network_progress()
             self.track_data(
                 "Stats / Algorithm update time (ms)",
                 (time.perf_counter() - started_at) * 1_000,
@@ -403,8 +401,6 @@ class A2C(BaseAgent):
         if not self.memory.filled:
             return
 
-        self._training_progress = (timestep + 1) / timesteps
-
         next_inputs = torch.flatten(
             self._observation_preprocessor(self._next_observation, train=False), start_dim=1
         )
@@ -433,7 +429,9 @@ class A2C(BaseAgent):
             torch.nn.utils.clip_grad_norm_(self._value_parameters, self.cfg.value_grad_norm_clip)
 
         self.policy_optimizer.step()
+        self.policy_network.proximal_step(self.policy_optimizer)
         self.value_optimizer.step()
+        self.value_network.proximal_step(self.value_optimizer)
 
         apply_collected_batch_norm_statistics(self.policy_network, self.value_network)
 

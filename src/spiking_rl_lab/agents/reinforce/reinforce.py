@@ -54,13 +54,15 @@ class Reinforce(BaseAgent):
             msg = "Failed to create REINFORCE policy components"
             raise AgentCreationError(msg) from exc
 
+        self.networks.append(self.policy_network)
+
         self._parameters = tuple(
             parameter
             for module in (self.policy_network, self.policy)
             for parameter in module.parameters()
             if parameter.requires_grad
         )
-        self.optimizer = torch.optim.Adamax(self._parameters, lr=cfg.learning_rate)
+        self.optimizer = torch.optim.Adam(self._parameters, lr=cfg.learning_rate)
 
         self.checkpoint_modules.update(
             policy_network=self.policy_network, policy=self.policy, optimizer=self.optimizer
@@ -187,9 +189,6 @@ class Reinforce(BaseAgent):
         )
         self._processed_observation = None
 
-    def pre_interaction(self, *, timestep: int, timesteps: int) -> None:
-        """Run the hook before environment interaction."""
-
     def reset_state(self, dones: torch.Tensor) -> None:
         """Reset recurrent state for completed environments."""
         self._hidden_states = self.policy_network.reset_state(self._hidden_states, dones)
@@ -199,6 +198,7 @@ class Reinforce(BaseAgent):
         if self.training and self.memory.filled:
             started_at = time.perf_counter()
             self.update(timestep=timestep, timesteps=timesteps)
+            self.update_network_progress()
             self.track_data(
                 "Stats / Algorithm update time (ms)",
                 (time.perf_counter() - started_at) * 1_000,
@@ -267,6 +267,7 @@ class Reinforce(BaseAgent):
             torch.nn.utils.clip_grad_norm_(self._parameters, self.cfg.grad_norm_clip)
 
         self.optimizer.step()
+        self.policy_network.proximal_step(self.optimizer)
         if self.scheduler is not None:
             self.scheduler.step()
 

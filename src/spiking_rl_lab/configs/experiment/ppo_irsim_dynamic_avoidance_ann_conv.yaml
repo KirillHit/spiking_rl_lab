@@ -102,7 +102,7 @@ agent:
     gae_lambda: 0.95
     policy_learning_rate: 1e-3
     value_learning_rate: 1e-3
-    policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
+    policy_learning_rate_scheduler: spiking_rl_lab.agents.ppo.schedulers.KLAdaptiveLR
     policy_learning_rate_scheduler_kwargs:
       kl_threshold: 0.03
       kl_factor: 1.3
