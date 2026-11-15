@@ -226,10 +226,8 @@ class DelayLinearNode(BaseNode):
         past = torch.where(state.initialized.unsqueeze(1), state.history, inputs.unsqueeze(1))
         taps = torch.cat((inputs.unsqueeze(1), past), dim=1)
         if self.mode == "fixed":
-            channel = torch.arange(inputs.shape[-1], device=inputs.device)
-            output = (taps[:, self.fixed_delays, channel] * self.weight).sum(dim=-1)
-            if self.bias is not None:
-                output = output + self.bias
+            gate = functional.one_hot(self.fixed_delays, self._cfg.max_delay + 1).permute(0, 2, 1)
+            gate = gate.to(self.weight)
         else:
             probabilities = (self.delay_logits / self.temperature).softmax(dim=1)
             gate = probabilities
@@ -238,6 +236,6 @@ class DelayLinearNode(BaseNode):
                     self.delay_logits.argmax(dim=1), self._cfg.max_delay + 1
                 ).permute(0, 2, 1)
                 gate = hard.to(probabilities) - probabilities.detach() + probabilities
-            kernel = gate * self.weight.unsqueeze(1)
-            output = functional.linear(taps.flatten(1), kernel.flatten(1), self.bias)
+        kernel = gate * self.weight.unsqueeze(1)
+        output = functional.linear(taps.flatten(1), kernel.flatten(1), self.bias)
         return output, DelayState(taps[:, :-1], torch.ones_like(state.initialized))
