@@ -1,10 +1,11 @@
 # @package _global_
-# PPO with a SigmaDelta Beta policy and scheduled sparsity on Ant-v5.
+# PPO with a SigmaDelta Beta policy and scheduled sparsity on Isaac Ant.
 env:
-  name: gymnasium
+  name: isaaclab
   params:
-    id: Ant-v5
-    n_envs: 32
+    id: Isaac-Ant-Direct
+    n_envs: 2048
+    device: cuda:0
     render: false
 
 agent:
@@ -14,7 +15,7 @@ agent:
       nodes:
         - name: delay_linear
           params:
-            out_features: 256
+            out_features: 64
             max_delay: 8
             delay_lr_multiplier: 20.0
             weight_proximal: 0.003
@@ -38,7 +39,55 @@ agent:
             proximal_end: 0.8
         - name: delay_linear
           params:
-            out_features: 256
+            out_features: 64
+            max_delay: 8
+            delay_lr_multiplier: 20.0
+            weight_proximal: 0.003
+            proximal_start: 0.7
+            proximal_end: 0.8
+            schedule:
+              - start: 0.0
+                mode: soft
+              - start: 0.7
+                mode: ste
+                temperature: 0.5
+              - start: 0.9
+                mode: fixed
+                temperature: 0.5
+        - name: sigma_delta
+          params:
+            threshold: 0.001
+            surrogate_width: 0.003
+            threshold_proximal: 1e-5
+            proximal_start: 0.7
+            proximal_end: 0.8
+        - name: delay_linear
+          params:
+            out_features: 64
+            max_delay: 8
+            delay_lr_multiplier: 20.0
+            weight_proximal: 0.003
+            proximal_start: 0.7
+            proximal_end: 0.8
+            schedule:
+              - start: 0.0
+                mode: soft
+              - start: 0.7
+                mode: ste
+                temperature: 0.5
+              - start: 0.9
+                mode: fixed
+                temperature: 0.5
+        - name: sigma_delta
+          params:
+            threshold: 0.001
+            surrogate_width: 0.003
+            threshold_proximal: 1e-5
+            proximal_start: 0.7
+            proximal_end: 0.8
+        - name: delay_linear
+          params:
+            out_features: 64
             max_delay: 8
             delay_lr_multiplier: 20.0
             weight_proximal: 0.003
@@ -80,19 +129,20 @@ agent:
         - name: linear
           params:
             out_features: 1
-    device: cpu
+    device: cuda:0
     policy:
       name: beta
       params:
+        action_bounds: [-1.0, 1.0]
         learnable_concentration: false
         learnable_bias: true
         b_common_init: 0.0
         b_diff_init: 0.0
-    rollouts: 256
+    rollouts: 64
     sequence_length: 8
-    state_burn_in: 32
-    learning_epochs: 4
-    mini_batches: 8
+    state_burn_in: 16
+    learning_epochs: 2
+    mini_batches: 4
     ratio_clip: 0.2
     value_clip: 0.0
     value_loss_scale: 1.0
@@ -116,14 +166,14 @@ agent:
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:
-      checkpoint_interval: 100000
+      checkpoint_interval: 10000
       write_interval: 5000
 
 runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_ant_sigma_delta
+  experiment_name: ppo_isaac_ant_sigma_delta
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
   demo_fps: 20.0
@@ -132,10 +182,10 @@ runner:
 
 trainer:
   params:
-    timesteps: 2000000
+    timesteps: 100000
     headless: true
     close_environment_at_exit: false
     validation:
       episodes: 32
       min_interval: 10000
-      max_interval: 50000
+      max_interval: 25000
