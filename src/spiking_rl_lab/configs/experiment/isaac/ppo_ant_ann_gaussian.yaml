@@ -102,7 +102,7 @@ runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_isaac_ant_ann_gaussian
+  experiment_name: ppo_isaac_ant_ann
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
   demo_fps: 20.0
