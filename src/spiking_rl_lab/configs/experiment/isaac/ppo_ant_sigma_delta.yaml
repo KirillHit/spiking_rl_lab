@@ -15,7 +15,7 @@ agent:
       nodes:
         - name: delay_linear
           params:
-            out_features: 64
+            out_features: 256
             max_delay: 8
             delay_lr_multiplier: 20.0
             weight_proximal: 0.003
@@ -39,7 +39,7 @@ agent:
             proximal_end: 0.8
         - name: delay_linear
           params:
-            out_features: 64
+            out_features: 256
             max_delay: 8
             delay_lr_multiplier: 20.0
             weight_proximal: 0.003
@@ -63,31 +63,7 @@ agent:
             proximal_end: 0.8
         - name: delay_linear
           params:
-            out_features: 64
-            max_delay: 8
-            delay_lr_multiplier: 20.0
-            weight_proximal: 0.003
-            proximal_start: 0.7
-            proximal_end: 0.8
-            schedule:
-              - start: 0.0
-                mode: soft
-              - start: 0.7
-                mode: ste
-                temperature: 0.5
-              - start: 0.9
-                mode: fixed
-                temperature: 0.5
-        - name: sigma_delta
-          params:
-            threshold: 0.001
-            surrogate_width: 0.003
-            threshold_proximal: 1e-5
-            proximal_start: 0.7
-            proximal_end: 0.8
-        - name: delay_linear
-          params:
-            out_features: 64
+            out_features: 256
             max_delay: 8
             delay_lr_multiplier: 20.0
             weight_proximal: 0.003
@@ -114,18 +90,78 @@ agent:
             out_features: 16
     value_network:
       nodes:
-        - name: linear
+        - name: delay_linear
           params:
             out_features: 256
-        - name: torch_activation
+            max_delay: 8
+            delay_lr_multiplier: 20.0
+            weight_proximal: 0.003
+            proximal_start: 0.7
+            proximal_end: 0.8
+            schedule:
+              - start: 0.0
+                mode: soft
+              - start: 0.7
+                mode: ste
+                temperature: 0.5
+              - start: 0.9
+                mode: fixed
+                temperature: 0.5
+        - name: sigma_delta
           params:
-            activation: relu
-        - name: linear
+            threshold: 0.001
+            surrogate_width: 0.003
+            threshold_proximal: 1e-5
+            proximal_start: 0.7
+            proximal_end: 0.8
+        - name: delay_linear
           params:
             out_features: 256
-        - name: torch_activation
+            max_delay: 8
+            delay_lr_multiplier: 20.0
+            weight_proximal: 0.003
+            proximal_start: 0.7
+            proximal_end: 0.8
+            schedule:
+              - start: 0.0
+                mode: soft
+              - start: 0.7
+                mode: ste
+                temperature: 0.5
+              - start: 0.9
+                mode: fixed
+                temperature: 0.5
+        - name: sigma_delta
           params:
-            activation: relu
+            threshold: 0.001
+            surrogate_width: 0.003
+            threshold_proximal: 1e-5
+            proximal_start: 0.7
+            proximal_end: 0.8
+        - name: delay_linear
+          params:
+            out_features: 256
+            max_delay: 8
+            delay_lr_multiplier: 20.0
+            weight_proximal: 0.003
+            proximal_start: 0.7
+            proximal_end: 0.8
+            schedule:
+              - start: 0.0
+                mode: soft
+              - start: 0.7
+                mode: ste
+                temperature: 0.5
+              - start: 0.9
+                mode: fixed
+                temperature: 0.5
+        - name: sigma_delta
+          params:
+            threshold: 0.001
+            surrogate_width: 0.003
+            threshold_proximal: 1e-5
+            proximal_start: 0.7
+            proximal_end: 0.8
         - name: linear
           params:
             out_features: 1
