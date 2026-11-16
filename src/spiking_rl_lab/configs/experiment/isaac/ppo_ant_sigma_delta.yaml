@@ -138,11 +138,11 @@ agent:
         learnable_bias: true
         b_common_init: 0.0
         b_diff_init: 0.0
-    rollouts: 64
+    rollouts: 128
     sequence_length: 8
     state_burn_in: 16
     learning_epochs: 2
-    mini_batches: 4
+    mini_batches: 16
     ratio_clip: 0.2
     value_clip: 0.0
     value_loss_scale: 1.0
