@@ -1,15 +1,16 @@
-"""ReLU represented by thresholded corrections with a Gaussian surrogate."""
+"""Activations represented by thresholded corrections with a Gaussian surrogate."""
 
 from __future__ import annotations
 
 import dataclasses
 import math
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, ClassVar, Literal, NamedTuple
 
 import torch
 from torch import nn
 from torch.nn import functional
 
+from spiking_rl_lab.core.exception import NetworkCreationError
 from spiking_rl_lab.core.validation import require_minimum, require_positive, require_range
 from spiking_rl_lab.networks.nodes.base_node import BaseNode
 from spiking_rl_lab.networks.nodes.builder import register_node
@@ -68,6 +69,14 @@ class SigmaDeltaNode(BaseNode):
     State remains connected to the graph throughout a sequence.
     """
 
+    activations: ClassVar[dict[str, type[nn.Module]]] = {
+        "elu": nn.ELU,
+        "relu": nn.ReLU,
+        "silu": nn.SiLU,
+        "sigmoid": nn.Sigmoid,
+        "tanh": nn.Tanh,
+    }
+
     @dataclasses.dataclass(kw_only=True, slots=True)
     class Config(BaseNode.Config):
         """Initial per-coordinate threshold and absolute Gaussian smoothing width."""
@@ -77,6 +86,7 @@ class SigmaDeltaNode(BaseNode):
         threshold_proximal: float = 0.0
         proximal_start: float = 0.0
         proximal_end: float = 0.0
+        activation: Literal["elu", "relu", "silu", "sigmoid", "tanh"] = "relu"
 
         def validate(self) -> None:
             """Require positive scales and nonnegative proximal strength."""
@@ -90,6 +100,12 @@ class SigmaDeltaNode(BaseNode):
         """Allocate one unconstrained threshold parameter per input coordinate."""
         super().__init__(cfg, input_shape)
         shape = require_shape("Node 'sigma_delta' input", input_shape, DenseTensorShape)
+        activation_cls = self.activations.get(cfg.activation)
+        if activation_cls is None:
+            available = ", ".join(sorted(self.activations))
+            msg = f"Unsupported SigmaDelta activation '{cfg.activation}'. Available: {available}"
+            raise NetworkCreationError(msg)
+        self._activation = activation_cls()
         self.raw_threshold = nn.Parameter(torch.empty(shape.features))
         self._threshold_proximal = cfg.threshold_proximal if cfg.proximal_end == 0 else 0.0
 
@@ -151,10 +167,10 @@ class SigmaDeltaNode(BaseNode):
     def forward(
         self, inputs: torch.Tensor, state: SigmaDeltaState | None = None
     ) -> tuple[torch.Tensor, SigmaDeltaState]:
-        """Hold the previous value or transmit the full signed ReLU correction."""
+        """Hold the previous value or transmit the full signed activation correction."""
         if state is None:
             state = self.initial_state(inputs)
-        value = inputs.relu()
+        value = self._activation(inputs)
         residual = value - state.value
         threshold = self.threshold
         hard = state.value + torch.where(residual.abs() > threshold, residual, 0.0)
