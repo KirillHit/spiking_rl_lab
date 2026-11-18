@@ -449,13 +449,13 @@ class PPO(BaseAgent):
         clipped = advantages * ratio.clamp(1 - self.cfg.ratio_clip, 1 + self.cfg.ratio_clip)
         policy_loss = -torch.minimum(surrogate, clipped).mean()
 
+        value_losses = (predicted_values - returns).square()
         if self.cfg.value_clip:
-            predicted_values = old_values + (predicted_values - old_values).clamp(
+            clipped_values = old_values + (predicted_values - old_values).clamp(
                 -self.cfg.value_clip, self.cfg.value_clip
             )
-        value_loss = self.cfg.value_loss_scale * torch.nn.functional.mse_loss(
-            predicted_values, returns
-        )
+            value_losses = torch.maximum(value_losses, (clipped_values - returns).square())
+        value_loss = self.cfg.value_loss_scale * value_losses.mean()
         entropy_loss = (
             -self.cfg.entropy_loss_scale * distribution.entropy().mean()
             if self.cfg.entropy_loss_scale
