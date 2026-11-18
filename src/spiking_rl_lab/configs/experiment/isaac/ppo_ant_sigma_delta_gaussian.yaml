@@ -186,7 +186,7 @@ agent:
     kl_threshold: 0.04
     discount_factor: 0.99
     gae_lambda: 0.95
-    policy_learning_rate: 1e-3
+    policy_learning_rate: 3e-4
     value_learning_rate: 1e-3
     policy_learning_rate_scheduler: spiking_rl_lab.agents.ppo.schedulers.KLAdaptiveLR
     policy_learning_rate_scheduler_kwargs:
@@ -199,7 +199,7 @@ agent:
     observation_preprocessor: skrl.resources.preprocessors.torch.RunningStandardScaler
     policy_grad_norm_clip: 0.5
     value_grad_norm_clip: 0.5
-    entropy_loss_scale: 5e-4
+    entropy_loss_scale: 1e-3
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:
