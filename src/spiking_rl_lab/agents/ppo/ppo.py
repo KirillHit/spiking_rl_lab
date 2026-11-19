@@ -263,6 +263,8 @@ class PPO(BaseAgent):
         inputs = torch.flatten(processed, start_dim=1)
         if self.training:
             self._processed_observation = inputs
+        else:
+            self._burn_in = None
 
         with torch.no_grad():
             if self._policy_state is None:
@@ -476,7 +478,7 @@ class PPO(BaseAgent):
         value_stateful: bool,
     ) -> tuple[ListState | None, ListState | None]:
         """Initialize the replay boundary and advance any preceding burn-in steps."""
-        if self.cfg.use_saved_replay_state:
+        if self.cfg.use_saved_replay_state or self._burn_in is None:
             policy_state = (
                 detach_state(
                     self._burn_in.policy_state if self._burn_in else self._sequence_policy_states[0]
