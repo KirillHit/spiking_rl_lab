@@ -32,8 +32,6 @@ class RunnerConfig:
     output_dir: Path = MISSING
     checkpoint_path: Path | None = None
     demo_fps: float = 20.0
-    dagshub_repo_owner: str = MISSING
-    dagshub_repo_name: str = MISSING
 
 
 @dataclass(slots=True)

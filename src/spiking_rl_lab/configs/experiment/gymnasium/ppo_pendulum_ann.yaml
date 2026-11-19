@@ -91,8 +91,6 @@ runner:
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
   demo_fps: 30.0
-  dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
-  dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
 
 trainer:
   params:
