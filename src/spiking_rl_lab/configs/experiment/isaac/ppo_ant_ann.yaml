@@ -1,10 +1,11 @@
 # @package _global_
-# PPO with an SNN categorical policy and a feed-forward value network on CartPole-v1.
+# PPO with an ANN Beta policy on Isaac Ant, matching the SigmaDelta training settings.
 env:
-  name: gymnasium
+  name: isaaclab
   params:
-    id: CartPole-v1
-    n_envs: 32
+    id: Isaac-Ant-Direct
+    n_envs: 2048
+    device: cuda:0
     render: false
 
 agent:
@@ -12,45 +13,27 @@ agent:
   params:
     policy_network:
       nodes:
-        - name: population_code
-          params:
-            neurons_per_feature: 16
-            sigma: 0.3
-            learnable_mu: true
-            learnable_sigma: true
         - name: linear
           params:
             out_features: 256
-            bias: false
-        - name: lif
+        - name: torch_activation
           params:
-            activity_scale: 0.025
-            decay: 0.6
-            normalize_input: true
-            v_th: 0.25
-            shared_decay: false
-            learnable_v_th: true
+            activation: relu
         - name: linear
           params:
             out_features: 256
-            bias: false
-        - name: lif
+        - name: torch_activation
           params:
-            activity_scale: 0.025
-            decay: 0.6
-            normalize_input: true
-            v_th: 0.25
-            shared_decay: false
-            learnable_v_th: true
+            activation: relu
         - name: linear
           params:
-            out_features: 2
-            bias: false
-        - name: li
+            out_features: 256
+        - name: torch_activation
           params:
-            decay: 0.8
-            normalize_input: true
-            shared_decay: false
+            activation: relu
+        - name: linear
+          params:
+            out_features: 16
     value_network:
       nodes:
         - name: linear
@@ -67,15 +50,27 @@ agent:
             activation: relu
         - name: linear
           params:
+            out_features: 256
+        - name: torch_activation
+          params:
+            activation: relu
+        - name: linear
+          params:
             out_features: 1
-    device: cpu
+    device: cuda:0
     policy:
-      name: categorical
-    rollouts: 256
+      name: beta
+      params:
+        action_bounds: [-1.0, 1.0]
+        learnable_concentration: false
+        learnable_bias: true
+        b_common_init: 0.0
+        b_diff_init: 0.0
+    rollouts: 128
     sequence_length: 8
-    state_burn_in: 32
-    learning_epochs: 4
-    mini_batches: 8
+    state_burn_in: 16
+    learning_epochs: 2
+    mini_batches: 16
     ratio_clip: 0.2
     value_clip: 0.0
     value_loss_scale: 1.0
@@ -84,7 +79,7 @@ agent:
     gae_lambda: 0.95
     policy_learning_rate: 1e-3
     value_learning_rate: 1e-3
-    policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
+    policy_learning_rate_scheduler: spiking_rl_lab.agents.ppo.schedulers.KLAdaptiveLR
     policy_learning_rate_scheduler_kwargs:
       kl_threshold: 0.03
       kl_factor: 1.3
@@ -99,26 +94,24 @@ agent:
     time_limit_bootstrap: true
     rewards_shaper: null
     experiment:
-      checkpoint_interval: 100000
-      write_interval: 1000
+      checkpoint_interval: 10000
+      write_interval: 5000
 
 runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_cartpole
+  experiment_name: ppo_isaac_ant_ann
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
-  demo_fps: 50.0
-  dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
-  dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
+  demo_fps: 20.0
 
 trainer:
   params:
-    timesteps: 20000
+    timesteps: 100000
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 100
-      min_interval: 1000
-      max_interval: 2000
+      episodes: 32
+      min_interval: 10000
+      max_interval: 25000

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from spiking_rl_lab.core.exception import EnvironmentCreationError
 from spiking_rl_lab.envs.base_env import BaseEnvBackend
@@ -28,6 +28,7 @@ class GymnasiumBackend(BaseEnvBackend):
         id: str
         render: bool = False
         n_envs: int = 1
+        vectorization_mode: Literal["sync", "async"] = "sync"
         kwargs: dict[str, Any] = field(default_factory=dict)
 
         def __post_init__(self) -> None:
@@ -52,7 +53,7 @@ class GymnasiumBackend(BaseEnvBackend):
                 env = gym.make_vec(
                     self._cfg.id,
                     num_envs=self._cfg.n_envs,
-                    vectorization_mode="sync",
+                    vectorization_mode=self._cfg.vectorization_mode,
                     vector_kwargs={"autoreset_mode": gym.vector.AutoresetMode.SAME_STEP},
                     render_mode="human" if self._cfg.render else None,
                     **self._cfg.kwargs,

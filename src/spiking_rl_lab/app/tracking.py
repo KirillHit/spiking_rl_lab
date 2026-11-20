@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import platform
 import subprocess
 from dataclasses import asdict
@@ -11,28 +12,20 @@ from pathlib import Path
 import mlflow
 import psutil
 import torch
+from dotenv import load_dotenv
 
 from spiking_rl_lab.app.config import BaseConfig
 
 log = logging.getLogger(__name__)
 
 
-def setup_mlflow(repo_owner: str, repo_name: str, experiment_name: str) -> None:
-    """Initialize MLflow tracking against the configured DagsHub repository."""
-    import httpx
-
+def setup_mlflow(experiment_name: str) -> None:
+    """Configure MLflow from the environment, using local storage by default."""
+    load_dotenv()
     mlflow.enable_system_metrics_logging()
-
-    try:
-        import dagshub
-
-        dagshub.init(repo_owner=repo_owner, repo_name=repo_name, mlflow=True)
-    except (httpx.NetworkError, ImportError):
-        log.warning(
-            "Failed to connect to DagsHub. Experiment logs will be stored locally: "
-            "./experiments/mlflow.db",
-        )
-        mlflow.set_tracking_uri("sqlite:///experiments/mlflow.db")
+    mlflow.set_tracking_uri(
+        os.environ.get("MLFLOW_TRACKING_URI") or "sqlite:///experiments/mlflow.db"
+    )
     mlflow.set_experiment(experiment_name)
 
 

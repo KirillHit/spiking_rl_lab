@@ -11,12 +11,12 @@ import torch
 from gymnasium.spaces import Discrete
 from gymnasium.spaces.utils import flatdim
 from skrl.memories.torch import RandomMemory
-from skrl.resources.schedulers.torch import KLAdaptiveLR
 
 from spiking_rl_lab.agents.a2c.a2c import _as_sequences, compute_gae
 from spiking_rl_lab.agents.base_agent import BaseAgent
 from spiking_rl_lab.agents.builder import register_agent
 from spiking_rl_lab.agents.ppo.ppo_cfg import PPOConfig
+from spiking_rl_lab.agents.ppo.schedulers import KLAdaptiveLR
 from spiking_rl_lab.core.exception import AgentCreationError
 from spiking_rl_lab.core.validation import require_shape_fields
 from spiking_rl_lab.envs.observations import bootstrap_observations
@@ -141,19 +141,10 @@ class PPO(BaseAgent):
             msg = "Failed to create PPO components"
             raise AgentCreationError(msg) from exc
 
-        self._policy_parameters = tuple(
-            parameter
-            for module in (self.policy_network, self.policy)
-            for parameter in module.parameters()
-            if parameter.requires_grad
-        )
-        self._value_parameters = tuple(
-            parameter for parameter in self.value_network.parameters() if parameter.requires_grad
-        )
-        self.policy_optimizer = torch.optim.Adam(
-            self._policy_parameters, lr=cfg.policy_learning_rate
-        )
-        self.value_optimizer = torch.optim.Adam(self._value_parameters, lr=cfg.value_learning_rate)
+        self.networks.extend((self.policy_network, self.value_network))
+
+        self._build_optimizers(cfg)
+
         self.checkpoint_modules.update(
             policy_network=self.policy_network,
             value_network=self.value_network,
@@ -196,6 +187,26 @@ class PPO(BaseAgent):
         self._current_log_prob: torch.Tensor | None = None
         self._distribution_statistics: dict[str, torch.Tensor] = {}
         self._distribution_statistics_steps = 0
+
+    def _build_optimizers(self, cfg: PPOConfig) -> None:
+        """Collect trainable parameters and build policy and value optimizers."""
+        self._policy_parameters = tuple(
+            parameter
+            for module in (self.policy_network, self.policy)
+            for parameter in module.parameters()
+            if parameter.requires_grad
+        )
+        self._value_parameters = tuple(
+            parameter for parameter in self.value_network.parameters() if parameter.requires_grad
+        )
+        policy_groups = self.policy_network.parameter_groups(cfg.policy_learning_rate)
+        policy_groups[0]["params"].extend(
+            parameter for parameter in self.policy.parameters() if parameter.requires_grad
+        )
+        self.policy_optimizer = torch.optim.Adam(policy_groups, lr=cfg.policy_learning_rate)
+        self.value_optimizer = torch.optim.Adam(
+            self.value_network.parameter_groups(cfg.value_learning_rate), lr=cfg.value_learning_rate
+        )
 
     def build_memory(self, *, env: Wrapper) -> Memory:
         """Build storage for one rollout."""
@@ -252,6 +263,8 @@ class PPO(BaseAgent):
         inputs = torch.flatten(processed, start_dim=1)
         if self.training:
             self._processed_observation = inputs
+        else:
+            self._burn_in = None
 
         with torch.no_grad():
             if self._policy_state is None:
@@ -339,9 +352,6 @@ class PPO(BaseAgent):
         self._current_value = None
         self._current_log_prob = None
 
-    def pre_interaction(self, *, timestep: int, timesteps: int) -> None:
-        """Prepare the agent before an environment interaction."""
-
     def reset_state(self, dones: torch.Tensor) -> None:
         """Reset recurrent state for completed environments."""
         self._policy_state = self.policy_network.reset_state(self._policy_state, dones)
@@ -352,6 +362,7 @@ class PPO(BaseAgent):
         if self.training and self.memory.filled:
             started_at = time.perf_counter()
             self.update(timestep=timestep, timesteps=timesteps)
+            self.update_network_progress()
             self.track_data(
                 "Stats / Algorithm update time (ms)",
                 (time.perf_counter() - started_at) * 1_000,
@@ -440,13 +451,13 @@ class PPO(BaseAgent):
         clipped = advantages * ratio.clamp(1 - self.cfg.ratio_clip, 1 + self.cfg.ratio_clip)
         policy_loss = -torch.minimum(surrogate, clipped).mean()
 
+        value_losses = (predicted_values - returns).square()
         if self.cfg.value_clip:
-            predicted_values = old_values + (predicted_values - old_values).clamp(
+            clipped_values = old_values + (predicted_values - old_values).clamp(
                 -self.cfg.value_clip, self.cfg.value_clip
             )
-        value_loss = self.cfg.value_loss_scale * torch.nn.functional.mse_loss(
-            predicted_values, returns
-        )
+            value_losses = torch.maximum(value_losses, (clipped_values - returns).square())
+        value_loss = self.cfg.value_loss_scale * value_losses.mean()
         entropy_loss = (
             -self.cfg.entropy_loss_scale * distribution.entropy().mean()
             if self.cfg.entropy_loss_scale
@@ -467,7 +478,7 @@ class PPO(BaseAgent):
         value_stateful: bool,
     ) -> tuple[ListState | None, ListState | None]:
         """Initialize the replay boundary and advance any preceding burn-in steps."""
-        if self.cfg.use_saved_replay_state:
+        if self.cfg.use_saved_replay_state or self._burn_in is None:
             policy_state = (
                 detach_state(
                     self._burn_in.policy_state if self._burn_in else self._sequence_policy_states[0]
@@ -673,6 +684,7 @@ class PPO(BaseAgent):
         if self.cfg.policy_grad_norm_clip:
             torch.nn.utils.clip_grad_norm_(self._policy_parameters, self.cfg.policy_grad_norm_clip)
         self.policy_optimizer.step()
+        self.policy_network.proximal_step(self.policy_optimizer)
 
     def _optimize_value(self, loss: torch.Tensor) -> None:
         """Apply one clipped critic gradient step."""
@@ -681,13 +693,12 @@ class PPO(BaseAgent):
         if self.cfg.value_grad_norm_clip:
             torch.nn.utils.clip_grad_norm_(self._value_parameters, self.cfg.value_grad_norm_clip)
         self.value_optimizer.step()
+        self.value_network.proximal_step(self.value_optimizer)
 
     def update(self, *, timestep: int, timesteps: int) -> None:
         """Update the policy and value networks from the collected rollout."""
         if not self.memory.filled:
             return
-
-        self._training_progress = (timestep + 1) / timesteps
 
         rollout = self._read_rollout()
         next_inputs = torch.flatten(

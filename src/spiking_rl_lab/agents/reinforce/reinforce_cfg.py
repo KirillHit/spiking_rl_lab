@@ -42,7 +42,7 @@ class ReinforceConfig(BaseAgent.Config):
     """Reward discount factor used to compute Monte Carlo returns."""
 
     learning_rate: float = 1e-3
-    """Adamax optimizer learning rate."""
+    """Adam optimizer learning rate."""
 
     learning_rate_scheduler: str | type[Any] | None = None
     """Optional learning rate scheduler class or dotted import path."""

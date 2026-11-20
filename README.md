@@ -20,14 +20,14 @@ Install the locked environment and launch an experiment:
 git clone --recurse-submodules https://github.com/KirillHit/spiking_rl_lab.git
 cd spiking_rl_lab
 uv sync
-uv run spiking-rl-lab experiment=ppo_pendulum_snn
+uv run spiking-rl-lab experiment=gymnasium/ppo_pendulum_snn
 ```
 
 Hydra overrides can be combined:
 
 ```bash
 uv run spiking-rl-lab \
-  experiment=ppo_pendulum_snn \
+  experiment=gymnasium/ppo_pendulum_snn \
   runner.seed=7 \
   trainer.params.timesteps=50000
 ```

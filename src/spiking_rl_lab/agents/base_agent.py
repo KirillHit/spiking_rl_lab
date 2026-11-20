@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from skrl.envs.wrappers.torch import Wrapper
     from skrl.memories.torch import Memory
 
+    from spiking_rl_lab.networks.node_network import NodeNetwork
     from spiking_rl_lab.networks.nodes.statistics import NodeStatistics
 
 
@@ -55,6 +56,18 @@ class BaseAgent(Agent, ConfiguredBase, ABC):
         self.last_tracking_metrics: dict[str, float] = {}
         self._tracking_ready: torch.Tensor | None = None
         self._training_progress = 0.0
+        self.networks: list[NodeNetwork] = []
+
+    def pre_interaction(self, *, timestep: int, timesteps: int) -> None:
+        """Record training progress for the next environment interaction."""
+        if not self.training or timesteps <= 0:
+            return
+        self._training_progress = (timestep + 1) / timesteps
+
+    def update_network_progress(self) -> None:
+        """Apply network schedules after training on the completed rollout."""
+        for network in self.networks:
+            network.update_training_progress(self._training_progress)
 
     def _node_statistics_loss(
         self, statistics: dict[str, NodeStatistics], network_name: str

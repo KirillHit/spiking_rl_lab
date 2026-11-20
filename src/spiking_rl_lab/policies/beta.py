@@ -73,6 +73,7 @@ class BetaPolicy(BasePolicy):
     class Config(BasePolicy.Config):
         """Beta policy configuration."""
 
+        action_bounds: tuple[float, float] | None = None
         reduction: Literal["mean", "sum"] = "sum"
         min_shape_offset: float = 1e-3
         concentration_scale: float = 1.0
@@ -98,6 +99,9 @@ class BetaPolicy(BasePolicy):
             raise TypeError(msg)
         low = torch.as_tensor(action_space.low)
         high = torch.as_tensor(action_space.high)
+        if cfg.action_bounds is not None:
+            low = torch.full_like(low, cfg.action_bounds[0])
+            high = torch.full_like(high, cfg.action_bounds[1])
         if not torch.isfinite(low).all() or not torch.isfinite(high).all():
             msg = "Beta policy requires finite action bounds"
             raise ValueError(msg)

@@ -49,11 +49,7 @@ class Runner:
         set_seed(cfg.runner.seed, deterministic=cfg.runner.deterministic)
 
         if cfg.runner.mode in (RunnerMode.train, RunnerMode.optimize):
-            setup_mlflow(
-                cfg.runner.dagshub_repo_owner,
-                cfg.runner.dagshub_repo_name,
-                cfg.runner.experiment_name,
-            )
+            setup_mlflow(cfg.runner.experiment_name)
 
         match cfg.runner.mode:
             case RunnerMode.train:

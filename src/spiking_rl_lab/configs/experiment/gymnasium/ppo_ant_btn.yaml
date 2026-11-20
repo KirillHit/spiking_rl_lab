@@ -1,10 +1,9 @@
 # @package _global_
-# PPO with an SNN Beta policy and a feed-forward value network on Walker2d-v5.
-
+# PPO with a BTN Beta policy and a feed-forward value network on Ant-v5.
 env:
   name: gymnasium
   params:
-    id: Walker2d-v5
+    id: Ant-v5
     n_envs: 32
     render: false
 
@@ -22,36 +21,34 @@ agent:
         - name: linear
           params:
             out_features: 256
-            bias: false
-        - name: lif
+            bias: true
+        - name: binary_activation
           params:
-            activity_scale: 0.025
-            decay: 0.6
-            normalize_input: true
-            v_th: 0.25
-            shared_decay: false
-            learnable_v_th: true
-        - name: linear
+            activation: relu
+            threshold: 0.5
+            hard: false
+            binary_scale: 0.1
+            activity_scale: 0.0
+            regularization_ramp_fraction: 0.5
+        - name: temporal_linear
           params:
             out_features: 256
-            bias: false
-        - name: lif
+            window: 16
+            bias: true
+        - name: binary_activation
           params:
-            activity_scale: 0.025
-            decay: 0.6
-            normalize_input: true
-            v_th: 0.25
-            shared_decay: false
-            learnable_v_th: true
-        - name: linear
+            activation: relu
+            threshold: 0.5
+            hard: false
+            binary_scale: 0.1
+            activity_scale: 0.0
+            regularization_ramp_fraction: 0.5
+        - name: temporal_linear
           params:
-            out_features: 12
-            bias: false
-        - name: li
-          params:
-            decay: 0.8
-            normalize_input: true
-            shared_decay: false
+            out_features: 16
+            window: 16
+            bias: true
+      substeps: 16
     value_network:
       nodes:
         - name: linear
@@ -68,7 +65,8 @@ agent:
             activation: relu
         - name: linear
           params:
-            out_features: 1
+            out_features: 16
+      substeps: 1
     device: cpu
     policy:
       name: beta
@@ -79,7 +77,8 @@ agent:
         b_diff_init: 0.0
     rollouts: 256
     sequence_length: 8
-    state_burn_in: 32
+    state_burn_in: 0
+    use_saved_replay_state: true
     learning_epochs: 4
     mini_batches: 8
     ratio_clip: 0.2
@@ -90,7 +89,7 @@ agent:
     gae_lambda: 0.95
     policy_learning_rate: 1e-3
     value_learning_rate: 1e-3
-    policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
+    policy_learning_rate_scheduler: spiking_rl_lab.agents.ppo.schedulers.KLAdaptiveLR
     policy_learning_rate_scheduler_kwargs:
       kl_threshold: 0.03
       kl_factor: 1.3
@@ -112,16 +111,14 @@ runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_walker2d
+  experiment_name: ppo_ant
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
-  demo_fps: 125
-  dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
-  dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
+  demo_fps: 20.0
 
 trainer:
   params:
-    timesteps: 1000000
+    timesteps: 2000000
     headless: true
     close_environment_at_exit: false
     validation:

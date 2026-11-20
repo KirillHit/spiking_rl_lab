@@ -30,7 +30,9 @@ class _BinaryStatistics:
     event_total: torch.Tensor | None = None
     count: int = 0
 
-    def update(self, outputs: torch.Tensor) -> None:
+    def update(
+        self, inputs: torch.Tensor, state: object, outputs: torch.Tensor, next_state: object
+    ) -> None:
         """Accumulate differentiable penalties and detached event counts."""
         if self.binary_scale is not None:
             penalty = (outputs.square() * (outputs - 1).square()).sum()

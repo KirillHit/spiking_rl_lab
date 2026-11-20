@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import torch
 from torch import nn
 
 from spiking_rl_lab.core.factory import ConfiguredBase
 from spiking_rl_lab.core.validation import require_minimum
+from spiking_rl_lab.networks.nodes.base_node import BaseNode
 from spiking_rl_lab.networks.nodes.builder import NodeConfig, build_node
 
 if TYPE_CHECKING:
@@ -62,6 +63,36 @@ class NodeNetwork(nn.Module, ConfiguredBase):
         """Initialize parameters through each node's own hook."""
         for node in self._net:
             node.initialize_parameters()
+
+    def update_training_progress(self, progress: float) -> None:
+        """Advance scheduled nodes, including nested composition children."""
+        if not 0 <= progress <= 1:
+            msg = "training progress must be in [0, 1]"
+            raise ValueError(msg)
+        for node in self.modules():
+            if isinstance(node, BaseNode):
+                node.update_training_progress(progress)
+
+    def proximal_step(self, optimizer: torch.optim.Optimizer) -> None:
+        """Update local constraints once per node, including nested branches."""
+        for node in self.modules():
+            if isinstance(node, BaseNode):
+                node.proximal_step(optimizer)
+
+    def parameter_groups(self, learning_rate: float) -> list[dict[str, Any]]:
+        """Collect local learning rates, keeping all remaining parameters in the base group."""
+        groups: dict[float, list[nn.Parameter]] = {learning_rate: []}
+        for node in self.modules():
+            if isinstance(node, BaseNode):
+                for group in node.parameter_groups(learning_rate):
+                    groups.setdefault(group["lr"], []).extend(group["params"])
+        assigned = {id(parameter) for parameters in groups.values() for parameter in parameters}
+        groups[learning_rate].extend(
+            parameter
+            for parameter in self.parameters()
+            if parameter.requires_grad and id(parameter) not in assigned
+        )
+        return [{"params": parameters, "lr": rate} for rate, parameters in groups.items()]
 
     def initial_state(self, inputs: torch.Tensor) -> ListState:
         """Create one initial state per node for a batch of inputs."""

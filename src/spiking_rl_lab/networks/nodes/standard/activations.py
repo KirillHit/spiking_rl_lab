@@ -21,6 +21,7 @@ class TorchActivationNode(BaseNode):
     """Parameter-free torch activation node."""
 
     activations: ClassVar[dict[str, type[torch.nn.Module]]] = {
+        "elu": torch.nn.ELU,
         "relu": torch.nn.ReLU,
         "silu": torch.nn.SiLU,
         "sigmoid": torch.nn.Sigmoid,
@@ -31,7 +32,7 @@ class TorchActivationNode(BaseNode):
     class Config(BaseNode.Config):
         """Torch activation node configuration."""
 
-        activation: Literal["relu", "silu", "sigmoid", "tanh"]
+        activation: Literal["elu", "relu", "silu", "sigmoid", "tanh"]
 
     def __init__(self, cfg: Config, input_shape: TensorShape) -> None:
         """Initialize the node."""

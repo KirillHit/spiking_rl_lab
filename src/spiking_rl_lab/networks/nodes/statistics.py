@@ -26,10 +26,12 @@ class NodeStatistics:
 
 
 class NodeStatisticsAccumulator(Protocol):
-    """Collect outputs for one sequence without modifying the node's state."""
+    """Collect calls for one sequence without modifying the node's state."""
 
-    def update(self, outputs: torch.Tensor) -> None:
-        """Accumulate a batch of outputs while preserving its gradient graph."""
+    def update(
+        self, inputs: torch.Tensor, state: object, outputs: torch.Tensor, next_state: object
+    ) -> None:
+        """Accumulate a node call while preserving the output gradient graph."""
         ...
 
     def result(self) -> NodeStatistics | None:
@@ -59,14 +61,18 @@ def collect_node_statistics(
 
             def collect(
                 _node: BaseNode,
-                _inputs: tuple[object, ...],
-                output: tuple[torch.Tensor, ListState | None],
+                args: tuple[object, ...],
+                kwargs: dict[str, object],
+                result: tuple[torch.Tensor, ListState | None],
                 *,
                 accumulator: NodeStatisticsAccumulator = accumulator,
             ) -> None:
-                accumulator.update(output[0])
+                inputs = args[0] if args else kwargs["inputs"]
+                state = args[1] if len(args) > 1 else kwargs.get("state")
+                output, next_state = result
+                accumulator.update(inputs, state, output, next_state)
 
-            handles.append(node.register_forward_hook(collect))
+            handles.append(node.register_forward_hook(collect, with_kwargs=True))
         yield statistics
     finally:
         for handle in handles:

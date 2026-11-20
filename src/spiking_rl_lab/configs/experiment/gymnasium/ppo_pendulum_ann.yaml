@@ -1,13 +1,11 @@
 # @package _global_
-# PPO baseline for dynamic obstacle avoidance in IR-SIM.
+# PPO with an ANN Beta policy and a feed-forward value network on Pendulum-v1.
 env:
   name: gymnasium
   params:
-    id: spiking_rl_lab.envs.irsim:IRSimDynamicAvoidance-v0
-    n_envs: 16
+    id: Pendulum-v1
+    n_envs: 32
     render: false
-    kwargs:
-      max_episode_steps: 1000
 
 agent:
   name: ppo
@@ -28,7 +26,7 @@ agent:
             activation: relu
         - name: linear
           params:
-            out_features: 4
+            out_features: 2
     value_network:
       nodes:
         - name: linear
@@ -67,7 +65,7 @@ agent:
     gae_lambda: 0.95
     policy_learning_rate: 1e-3
     value_learning_rate: 1e-3
-    policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
+    policy_learning_rate_scheduler: spiking_rl_lab.agents.ppo.schedulers.KLAdaptiveLR
     policy_learning_rate_scheduler_kwargs:
       kl_threshold: 0.03
       kl_factor: 1.3
@@ -83,25 +81,23 @@ agent:
     rewards_shaper: null
     experiment:
       checkpoint_interval: 100000
-      write_interval: 5000
+      write_interval: 1000
 
 runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_irsim_dynamic_avoidance
+  experiment_name: ppo_pendulum
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
-  demo_fps: 20.0
-  dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
-  dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
+  demo_fps: 30.0
 
 trainer:
   params:
-    timesteps: 1000000
+    timesteps: 40000
     headless: true
     close_environment_at_exit: false
     validation:
-      episodes: 32
-      min_interval: 10000
-      max_interval: 50000
+      episodes: 100
+      min_interval: 1000
+      max_interval: 2000

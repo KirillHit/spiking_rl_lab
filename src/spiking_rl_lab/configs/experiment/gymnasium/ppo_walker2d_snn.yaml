@@ -1,13 +1,12 @@
 # @package _global_
-# PPO with a dense SNN policy for dynamic avoidance in IR-SIM.
+# PPO with an SNN Beta policy and a feed-forward value network on Walker2d-v5.
+
 env:
   name: gymnasium
   params:
-    id: spiking_rl_lab.envs.irsim:IRSimDynamicAvoidance-v0
-    n_envs: 16
+    id: Walker2d-v5
+    n_envs: 32
     render: false
-    kwargs:
-      max_episode_steps: 1000
 
 agent:
   name: ppo
@@ -31,7 +30,6 @@ agent:
             normalize_input: true
             v_th: 0.25
             shared_decay: false
-            learnable_decay: true
             learnable_v_th: true
         - name: linear
           params:
@@ -44,18 +42,16 @@ agent:
             normalize_input: true
             v_th: 0.25
             shared_decay: false
-            learnable_decay: true
             learnable_v_th: true
         - name: linear
           params:
-            out_features: 4
+            out_features: 12
             bias: false
         - name: li
           params:
             decay: 0.8
             normalize_input: true
             shared_decay: false
-            learnable_decay: true
     value_network:
       nodes:
         - name: linear
@@ -94,7 +90,7 @@ agent:
     gae_lambda: 0.95
     policy_learning_rate: 1e-3
     value_learning_rate: 1e-3
-    policy_learning_rate_scheduler: skrl.resources.schedulers.torch.KLAdaptiveLR
+    policy_learning_rate_scheduler: spiking_rl_lab.agents.ppo.schedulers.KLAdaptiveLR
     policy_learning_rate_scheduler_kwargs:
       kl_threshold: 0.03
       kl_factor: 1.3
@@ -116,12 +112,10 @@ runner:
   mode: train
   seed: 42
   deterministic: true
-  experiment_name: ppo_irsim_dynamic_avoidance
+  experiment_name: ppo_walker2d
   output_dir: ${hydra:runtime.output_dir}
   checkpoint_path: null
-  demo_fps: 20.0
-  dagshub_repo_owner: ${oc.env:DAGSHUB_REPO_OWNER,KirillHit}
-  dagshub_repo_name: ${oc.env:DAGSHUB_REPO_NAME,spiking_rl_lab}
+  demo_fps: 125
 
 trainer:
   params:
