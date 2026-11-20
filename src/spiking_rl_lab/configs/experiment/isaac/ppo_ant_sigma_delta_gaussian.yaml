@@ -23,8 +23,6 @@ agent:
             proximal_end: 0.8
             schedule:
               - start: 0.0
-                mode: soft
-              - start: 0.7
                 mode: ste
                 temperature: 0.5
               - start: 0.9
@@ -47,8 +45,6 @@ agent:
             proximal_end: 0.8
             schedule:
               - start: 0.0
-                mode: soft
-              - start: 0.7
                 mode: ste
                 temperature: 0.5
               - start: 0.9
@@ -71,8 +67,6 @@ agent:
             proximal_end: 0.8
             schedule:
               - start: 0.0
-                mode: soft
-              - start: 0.7
                 mode: ste
                 temperature: 0.5
               - start: 0.9
@@ -100,8 +94,6 @@ agent:
             proximal_end: 0.8
             schedule:
               - start: 0.0
-                mode: soft
-              - start: 0.7
                 mode: ste
                 temperature: 0.5
               - start: 0.9
@@ -124,8 +116,6 @@ agent:
             proximal_end: 0.8
             schedule:
               - start: 0.0
-                mode: soft
-              - start: 0.7
                 mode: ste
                 temperature: 0.5
               - start: 0.9
@@ -148,8 +138,6 @@ agent:
             proximal_end: 0.8
             schedule:
               - start: 0.0
-                mode: soft
-              - start: 0.7
                 mode: ste
                 temperature: 0.5
               - start: 0.9
